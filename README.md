@@ -6,7 +6,9 @@
 > 폰 설정·모델 변경과 도로 입력은 꺼져 있어. 실제 C4 부팅/무선 수신은 미검증이야.
 > Home test only. Phone reception is opt-in on device. No device or road validation yet.
 
-[QR phone pairing, installation and return to sunnypilot](KORANIPILOT_HOME.md). Requires Android manager v0.12-qr-pairing for scanning.
+[QR phone pairing, startup repair, usage guide and restoration](KORANIPILOT_HOME.md). Requires Android manager v0.12-qr-pairing for scanning.
+
+This revision fixes read-only TLS identity storage and identifies the home profile as Koranipilot. Explicit local usage acknowledgement is required; original licenses remain accessible.
 
 ![](https://user-images.githubusercontent.com/47793918/233812617-beab2e71-57b9-479e-8bff-c3931347ca40.png)
 

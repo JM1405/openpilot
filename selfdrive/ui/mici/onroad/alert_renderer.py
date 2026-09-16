@@ -1,3 +1,4 @@
+from openpilot.common.koranipilot import brand_text
 import time
 from enum import StrEnum
 from typing import NamedTuple
@@ -68,7 +69,7 @@ class Alert:
 
 # Pre-defined alert instances
 ALERT_STARTUP_PENDING = Alert(
-  text1="sunnypilot Unavailable",
+  text1=brand_text("sunnypilot Unavailable"),
   text2="Waiting to start",
   size=AlertSize.mid,
   status=AlertStatus.normal,
@@ -308,7 +309,7 @@ class AlertRenderer(Widget, SpeedLimitAlertRenderer):
     icon_side = alert_layout.icon.side if alert_layout.icon is not None else None
 
     # TODO: hack
-    alert_text1 = alert.text1.lower().replace('calibrating: ', 'calibrating:\n')
+    alert_text1 = brand_text(alert.text1).lower().replace('calibrating: ', 'calibrating:\n')
     can_draw_second_line = False
     # TODO: there should be a common way to determine font size based on text length to maximize rect
     if len(alert_text1) <= 12:
@@ -338,7 +339,7 @@ class AlertRenderer(Widget, SpeedLimitAlertRenderer):
     self._alert_text1_label.set_alignment(rl.GuiTextAlignment.TEXT_ALIGN_LEFT if icon_side != 'left' else rl.GuiTextAlignment.TEXT_ALIGN_RIGHT)
     self._alert_text1_label.render(text_rect1)
 
-    alert_text2 = alert.text2.lower()
+    alert_text2 = brand_text(alert.text2).lower()
 
     # randomize chars and length for testing
     if DEBUG:

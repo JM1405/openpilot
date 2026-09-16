@@ -102,6 +102,36 @@
     "python_tests": 75,
     "android_jvm_tests": 47,
     "android_synthetic_scan_flow_checks": 11,
-    "physical_camera_scan_verified": false
+    "physical_camera_scan_verified": false,
+    "as_of_commit": "b6535ad61f45445f2612bcaf294b23a48486cd9c"
+  },
+  "startup_brand_revision": {
+    "base_commit": "b6535ad61f45445f2612bcaf294b23a48486cd9c",
+    "files": {
+      "common/koranipilot.py": "14215d3a895418cabb883ee37f1043ed6398415337196546bd1f0e34e99de012",
+      "selfdrive/ui/sunnypilot/mici/korean/phone_transport.py": "b486a292fbff76ec66c21ec02634b2017cd790be469a1e0290e982c89e0c54ad",
+      "selfdrive/ui/sunnypilot/mici/korean/phone_runtime.py": "c108086d236543f20abda56633ba2d656d7a5b637721e7dca5fc6f0c6833d713",
+      "selfdrive/ui/sunnypilot/mici/korean/native_phone.py": "47ee43b5c48b542fa9612b76f53bca03523bd7262080644155ad59a726e3b7c4",
+      "selfdrive/ui/mici/layouts/home.py": "69d561073dbea68e2023d9ef80d17e522c4011f8ba5c52fe8fba0e8d0ecf17cd",
+      "selfdrive/ui/mici/layouts/settings/device.py": "58621a8e978f12800c13607b6895a42737c6013c601cb98a33944b8fb9a3d8bf",
+      "selfdrive/ui/mici/layouts/settings/toggles.py": "c33302cbd677d5ca0cb603f1e0663f6d7f8ffde76808f6f666144a8729a7f3a8",
+      "selfdrive/ui/mici/onroad/augmented_road_view.py": "a6cfa4e5d4c7c49775176dab2e03e9549159640831f34356482a455aab34555c",
+      "selfdrive/ui/mici/onroad/alert_renderer.py": "e30d50664c8438252d66cc75bb2fe61aef244ddee1b4fac840cbfe0c123c7658",
+      "selfdrive/ui/mici/layouts/offroad_alerts.py": "0f3bd38d2f7b934f1570fbe76de22b2534775733a03e66cd9e67ae855b0dc966",
+      "selfdrive/ui/mici/layouts/settings/firehose.py": "5d4498e94b888830c5eb08309804c2ce70f8f2234103a6e3ffad2d114df0b753",
+      "selfdrive/ui/sunnypilot/mici/layouts/settings.py": "4a3182d1ec1f26b9a58267b3305ca992864714ad9fae6478fa25ecec2a4c7eba",
+      "sunnypilot/sunnylink/utils.py": "672e5daee948dd4ce2dc7fc4e502903f2f2bacd9e0b284e21ae684f5ce635dd8",
+      "sunnypilot/sunnylink/athena/manage_sunnylinkd.py": "f2ca64bed339d0ede11fd62e5df4090b76fad748c3b8728eba0a90d9d2cbb53e",
+      "selfdrive/ui/mici/layouts/onboarding.py": "f6b1f3b2e15230f1648fa0efebed2970aabf3d6e5b97b3651ce09a18af9fb722",
+      "system/hardware/hardwared.py": "9474d428920f44a2be8747dffecaf0c048213f098476c00d448578502c7d1533",
+      "selfdrive/ui/sunnypilot/mici/korean/tests/test_phone_startup_brand.py": "4ed2719811e5ada95d2b1d86c4b67083e019e283d3186e4b5ff81f4fbd549b12"
+    },
+    "identity_root": "/data/koranipilot/phone_tls",
+    "python_tests": 81,
+    "notice_version": "koranipilot-home-1",
+    "sunnylink_disabled_in_home_profile": true,
+    "hardwared_notice_gate_changed": true,
+    "actual_c4_recovery_verified": false,
+    "android_apk_changed": false
   }
 }

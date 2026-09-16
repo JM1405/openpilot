@@ -1,3 +1,4 @@
+from openpilot.common.koranipilot import brand_text
 import numpy as np
 import pyray as rl
 from cereal import car, log
@@ -155,7 +156,7 @@ class AugmentedRoadView(CameraView):
     self._alert_renderer = AlertRenderer()
     self._driver_state_renderer = DriverStateRenderer()
     self._confidence_ball = ConfidenceBall()
-    self._offroad_label = UnifiedLabel("start the car to\nuse sunnypilot", 54, FontWeight.DISPLAY,
+    self._offroad_label = UnifiedLabel(brand_text("start the car to\nuse sunnypilot"), 54, FontWeight.DISPLAY,
                                        text_color=rl.Color(255, 255, 255, int(255 * 0.9)),
                                        alignment=rl.GuiTextAlignment.TEXT_ALIGN_CENTER,
                                        alignment_vertical=rl.GuiTextAlignmentVertical.TEXT_ALIGN_MIDDLE)
@@ -175,7 +176,7 @@ class AugmentedRoadView(CameraView):
     elif ui_state.ignition and not ui_state.started:
       self._offroad_label.set_text("openpilot can't start\ncheck alerts")
     else:
-      self._offroad_label.set_text("start the car to\nuse sunnypilot")
+      self._offroad_label.set_text(brand_text("start the car to\nuse sunnypilot"))
 
   def _handle_mouse_release(self, mouse_pos: MousePos):
     # Don't trigger click callback if bookmark was triggered

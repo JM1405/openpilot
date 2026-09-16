@@ -1,3 +1,4 @@
+from openpilot.common.koranipilot import brand_text
 import pyray as rl
 import re
 import threading
@@ -269,9 +270,9 @@ class MiciOffroadAlerts(Scroller):
           parts = new_desc.split(" / ")
           if len(parts) > 3:
             version, date = parts[0], parts[3]
-            version_string = f"\nsunnypilot {version}, {date}\n"
+            version_string = brand_text(f"\nsunnypilot {version}, {date}\n")
 
-        update_alert_data.text = f"Update available {version_string}. Click to update. Read the release notes at blog.comma.ai."
+        update_alert_data.text = f"Update available {version_string}. Click to update. Read the release notes in the project repository."
         update_alert_data.visible = True
         active_count += 1
       else:

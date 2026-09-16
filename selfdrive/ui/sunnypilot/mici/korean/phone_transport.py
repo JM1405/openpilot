@@ -1,4 +1,5 @@
 """Phone-only HTTPS transport. Approval exists only on the native device UI."""
+import errno
 import hashlib
 import ipaddress
 import json
@@ -260,9 +261,35 @@ def ensure_tls_identity(directory, address):
   return str(cert_path), str(key_path)
 
 
+class PhoneStartupError(OSError):
+  """A safe, stage-specific display message; never contains certificate material."""
+  def __init__(self, stage, cause):
+    self.stage = stage
+    code = errno.errorcode.get(getattr(cause, 'errno', None), type(cause).__name__)
+    self.code = code
+    messages = {
+      'address': 'Wi-Fi 주소를 확인해줘',
+      'identity': '인증서 저장을 확인해줘',
+      'server': '연결 서비스 시작 실패',
+    }
+    super().__init__(messages[stage] + ' / ' + code)
+    self.display = messages[stage] + '\n' + code
+
+
 def local_phone_transport(service, *, address=None, port=7443, identity_root=None):
-  from openpilot.system.hardware.hw import Paths
-  address = address or local_ipv4()
-  root = identity_root or str(Path(Paths.persist_root()) / 'koranipilot' / 'phone_tls')
-  cert, key = ensure_tls_identity(root, address)
-  return PhoneTransport(service, host=address, port=port, authority=f'{address}:{port}', certfile=cert, keyfile=key)
+  from openpilot.common.koranipilot import local_data_root
+  try:
+    address = address or local_ipv4()
+  except (OSError, ValueError, ImportError) as exc:
+    raise PhoneStartupError('address', exc) from exc
+  # AGNOS mounts /persist as read-only squashfs. /data is app-writable and
+  # survives normal software updates. Keep identities outside the checkout.
+  root = identity_root or str(Path(local_data_root()) / 'phone_tls')
+  try:
+    cert, key = ensure_tls_identity(root, address)
+  except (OSError, ValueError, ImportError) as exc:
+    raise PhoneStartupError('identity', exc) from exc
+  try:
+    return PhoneTransport(service, host=address, port=port, authority=f'{address}:{port}', certfile=cert, keyfile=key)
+  except (OSError, ValueError, ImportError) as exc:
+    raise PhoneStartupError('server', exc) from exc

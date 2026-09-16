@@ -146,8 +146,8 @@ class PhoneRuntime:
       self.attach(local_phone_transport(self.service, port=int(os.getenv('KOREAN_PHONE_PORT', '7443'))))
       self.network_error = ''
       return True
-    except (OSError, ValueError, ImportError):
-      self.network_error = 'Wi-Fi 주소나 폰 연결 인증서를 확인해 줘'
+    except (OSError, ValueError, ImportError) as exc:
+      self.network_error = getattr(exc, 'display', '연결 준비 실패\n' + type(exc).__name__)
       return False
 
   def update(self, sm, started_frame=0, release=False):

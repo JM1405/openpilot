@@ -1,3 +1,4 @@
+from openpilot.common.koranipilot import brand_text, enabled as koranipilot_enabled
 import os
 import threading
 import pyray as rl
@@ -172,7 +173,7 @@ class UpdateOpenpilotBigButton(BigButton):
     self._txt_update_icon = gui_app.texture("icons_mici/settings/device/update.png", 64, 75)
     self._txt_reboot_icon = gui_app.texture("icons_mici/settings/device/reboot.png", 64, 70)
     self._txt_up_to_date_icon = gui_app.texture("icons_mici/settings/device/up_to_date.png", 64, 64)
-    super().__init__("update sunnypilot", "", self._txt_update_icon)
+    super().__init__(brand_text("update sunnypilot"), "", self._txt_update_icon)
 
     self._waiting_for_updater_t: float | None = None
     self._hide_value_t: float | None = None
@@ -211,7 +212,7 @@ class UpdateOpenpilotBigButton(BigButton):
     if value:
       self.set_text("")
     else:
-      self.set_text("update sunnypilot")
+      self.set_text(brand_text("update sunnypilot"))
 
   def _update_state(self):
     super()._update_state()
@@ -313,7 +314,7 @@ class DeviceLayoutMici(NavScroller):
     reset_calibration_btn = EngagedConfirmationButton("reset calibration", "reset", gui_app.texture("icons_mici/settings/device/lkas.png", 122, 64),
                                                       reset_calibration_callback)
 
-    uninstall_openpilot_btn = EngagedConfirmationButton("uninstall sunnypilot", "uninstall",
+    uninstall_openpilot_btn = EngagedConfirmationButton(brand_text("uninstall sunnypilot"), "uninstall",
                                                         gui_app.texture("icons_mici/settings/device/uninstall.png", 64, 64),
                                                         uninstall_openpilot_callback, exit_on_confirm=False)
 
@@ -335,7 +336,7 @@ class DeviceLayoutMici(NavScroller):
     review_training_guide_btn.set_click_callback(lambda: gui_app.push_widget(ReviewTrainingGuide(completed_callback=lambda: gui_app.pop_widgets_to(self))))
     review_training_guide_btn.set_enabled(lambda: ui_state.is_offroad())
 
-    terms_btn = BigButton("terms &\nconditions", "", gui_app.texture("icons_mici/settings/device/info.png", 64, 64))
+    terms_btn = BigButton("usage guide" if koranipilot_enabled() else "terms &\nconditions", "", gui_app.texture("icons_mici/settings/device/info.png", 64, 64))
     terms_btn.set_click_callback(lambda: gui_app.push_widget(ReviewTermsPage()))
 
     self._scroller.add_widgets([

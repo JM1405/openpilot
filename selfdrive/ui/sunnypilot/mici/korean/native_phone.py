@@ -97,8 +97,9 @@ class KoreanPhonePage(Widget):
       text('폰 연결', 162, 17, 28)
       self.action('mode', '집 모드', (368, 8, 152, 48))
       if self.runtime.transport is None:
-        text('Wi-Fi 연결을 확인해줘', 16, 79, 28)
-        text('주소 준비가 아직 안 됐어', 16, 119, 24)
+        details = (self.runtime.network_error or '폰 연결 준비 중\n다시 확인을 눌러줘').split('\n', 1)
+        text(details[0][:22], 16, 79, 26)
+        text(details[1][:28] if len(details) > 1 else '', 16, 119, 24)
         self.action('retry', '다시 확인', (16, 170, 504, 58), True)
       elif self.message:
         lines(self.message, 78)

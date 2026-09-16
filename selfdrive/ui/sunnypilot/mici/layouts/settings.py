@@ -4,6 +4,7 @@ Copyright (c) 2021-, Haibin Wen, sunnypilot, and a number of other contributors.
 This file is part of sunnypilot and is licensed under the MIT License.
 See the LICENSE.md file in the root directory for more details.
 """
+from openpilot.common.koranipilot import enabled as koranipilot_enabled
 from openpilot.selfdrive.ui.mici.layouts.settings import settings as OP
 from openpilot.selfdrive.ui.mici.layouts.settings.settings import SettingsBigButton
 from openpilot.selfdrive.ui.mici.layouts.settings.device import DeviceLayoutMici
@@ -32,9 +33,10 @@ class SettingsLayoutSP(OP.SettingsLayout):
                                                 BIG_ICON_SIZE)
     self.icon_offroad_slider = gui_app.texture("icons_mici/settings/device/lkas.png", BIG_ICON_SIZE, BIG_ICON_SIZE)
 
-    sunnylink_panel = SunnylinkLayoutMici(back_callback=gui_app.pop_widget)
-    sunnylink_btn = SettingsBigButton(tr("sunnylink"), "", gui_app.texture("icons_mici/settings/developer/ssh.png", 55, 55))
-    sunnylink_btn.set_click_callback(lambda: gui_app.push_widget(sunnylink_panel))
+    if not koranipilot_enabled():
+      sunnylink_panel = SunnylinkLayoutMici(back_callback=gui_app.pop_widget)
+      sunnylink_btn = SettingsBigButton(tr("sunnylink"), "", gui_app.texture("icons_mici/settings/developer/ssh.png", 55, 55))
+      sunnylink_btn.set_click_callback(lambda: gui_app.push_widget(sunnylink_panel))
 
     models_panel = ModelsLayoutMici(back_callback=gui_app.pop_widget)
     models_btn = SettingsBigButton(tr("models"), "", gui_app.texture("../../sunnypilot/selfdrive/assets/offroad/icon_models.png", ICON_SIZE, ICON_SIZE))
@@ -56,8 +58,9 @@ class SettingsLayoutSP(OP.SettingsLayout):
 
     items = self._scroller._items.copy()
 
-    items.insert(1, sunnylink_btn)
-    items.insert(2, models_btn)
+    if not koranipilot_enabled():
+      items.insert(1, sunnylink_btn)
+    items.insert(1 if koranipilot_enabled() else 2, models_btn)
 
     # front slots (only one ever visible at a time): exit-always-offroad, then enable-onroad
     items.insert(0, self._enable_offroad_btn_onroad)

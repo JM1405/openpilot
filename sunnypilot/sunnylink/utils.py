@@ -1,3 +1,4 @@
+from openpilot.common.koranipilot import enabled as koranipilot_enabled
 import base64
 import gzip
 import json
@@ -9,7 +10,7 @@ from openpilot.system.version import is_prebuilt
 def get_sunnylink_status(params=None) -> tuple[bool, bool, bool]:
   """Get the status of Sunnylink on the device. Returns a tuple of (is_sunnylink_enabled, is_registered)."""
   params = params or Params()
-  is_sunnylink_enabled = params.get_bool("SunnylinkEnabled")
+  is_sunnylink_enabled = not koranipilot_enabled() and params.get_bool("SunnylinkEnabled")
   is_registered = params.get("SunnylinkDongleId") not in (None, UNREGISTERED_SUNNYLINK_DONGLE_ID)
   is_on_temporary_fault = params.get_bool("SunnylinkTempFault")
   return is_sunnylink_enabled, is_registered, is_on_temporary_fault
@@ -38,7 +39,7 @@ def register_sunnylink():
   """Register the device with Sunnylink if it is enabled."""
   extra_args = {}
 
-  if not Params().get_bool("SunnylinkEnabled"):
+  if koranipilot_enabled() or not Params().get_bool("SunnylinkEnabled"):
     print("Sunnylink is not enabled. Exiting.")
     exit(0)
 

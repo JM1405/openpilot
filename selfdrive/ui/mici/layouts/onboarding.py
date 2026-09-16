@@ -1,3 +1,4 @@
+from openpilot.common.koranipilot import brand_text, enabled as koranipilot_enabled, accepted_notices, notice_versions
 import math
 import numpy as np
 import qrcode
@@ -7,7 +8,7 @@ from openpilot.common.filter_simple import FirstOrderFilter
 from openpilot.system.ui.lib.application import FontWeight, gui_app
 from openpilot.system.ui.widgets import Widget
 from openpilot.system.ui.widgets.button import SmallCircleIconButton
-from openpilot.system.ui.widgets.scroller import NavScroller, Scroller
+from openpilot.system.ui.widgets.scroller import NavScroller, Scroller, NavRawScrollPanel
 from openpilot.system.ui.widgets.nav_widget import NavWidget
 from openpilot.system.ui.mici_setup import GreyBigButton, BigPillButton
 from openpilot.system.ui.widgets.label import gui_label
@@ -15,6 +16,7 @@ from openpilot.system.ui.lib.multilang import tr
 from openpilot.system.version import terms_version, training_version, terms_version_sp
 from openpilot.system.version import sunnylink_consent_version, sunnylink_consent_declined
 from openpilot.selfdrive.ui.ui_state import ui_state, device
+from openpilot.selfdrive.ui.mici.widgets.button import BigButton
 from openpilot.selfdrive.ui.mici.widgets.dialog import BigConfirmationCircleButton
 from openpilot.selfdrive.ui.mici.onroad.driver_state import DriverStateRenderer
 from openpilot.selfdrive.ui.mici.onroad.driver_camera_dialog import BaseDriverCameraDialog
@@ -63,7 +65,7 @@ class TrainingGuidePreDMTutorial(NavScroller):
       GreyBigButton("driver monitoring\ncheck", "scroll to continue",
                     gui_app.texture("icons_mici/setup/green_dm.png", 64, 64)),
       GreyBigButton("", "Next, we'll check if comma four can detect the driver properly."),
-      GreyBigButton("", "sunnypilot uses the cabin camera to check if the driver is distracted."),
+      GreyBigButton("", brand_text("sunnypilot uses the cabin camera to check if the driver is distracted.")),
       GreyBigButton("", "If it does not have a clear view of the driver, unplug and remount before continuing."),
       continue_button,
     ])
@@ -235,7 +237,7 @@ class TrainingGuideRecordFront(NavScroller):
     self._scroller.add_widgets([
       GreyBigButton("driver camera data", "do you want to share video data for training?",
                     gui_app.texture("icons_mici/setup/green_dm.png", 64, 64)),
-      GreyBigButton("", "Sharing your data with comma helps improve openpilot and sunnypilot for everyone."),
+      GreyBigButton("", "Video shared with comma is used to train openpilot models. This choice is optional."),
       self._accept_button,
       self._decline_button,
     ])
@@ -249,9 +251,9 @@ class TrainingGuideAttentionNotice(Scroller):
     continue_button.set_click_callback(continue_callback)
 
     self._scroller.add_widgets([
-      GreyBigButton("what is sunnypilot?", "scroll to continue",
+      GreyBigButton(brand_text("what is sunnypilot?"), "scroll to continue",
                     gui_app.texture("icons_mici/setup/green_info.png", 64, 64)),
-      GreyBigButton("", "1. sunnypilot is a driver assistance system."),
+      GreyBigButton("", brand_text("1. sunnypilot is a driver assistance system.")),
       GreyBigButton("", "2. You must pay attention at all times."),
       GreyBigButton("", "3. You must be ready to take over at any time."),
       GreyBigButton("", "4. You are fully responsible for driving the car."),
@@ -312,27 +314,77 @@ class QRCodeWidget(Widget):
       rl.unload_texture(self._qr_texture)
 
 
+class LicenseTextPage(NavRawScrollPanel):
+  def __init__(self, text):
+    super().__init__()
+    from openpilot.system.ui.widgets.html_render import HtmlRenderer, ElementType
+    self._content = HtmlRenderer(text=text, text_size={ElementType.P: 24})
+
+  def _render(self, rect):
+    area = rl.Rectangle(rect.x + 12, rect.y + 8, rect.width - 24, rect.height - 16)
+    height = self._content.get_total_height(int(area.width))
+    content = rl.Rectangle(area.x, area.y, area.width, height)
+    content.y += round(self._scroll_panel.update(area, height))
+    self._content.render(content)
+
+
+class OpenSourcePage(NavScroller):
+  def __init__(self):
+    super().__init__()
+    from html import escape
+    from pathlib import Path
+    from openpilot.common.basedir import BASEDIR
+    self._scroller.add_widget(GreyBigButton("open source", "Built on openpilot\nand sunnypilot."))
+    for title, name in (("openpilot license", "LICENSE"), ("sunnypilot license", "LICENSE.md"),
+                        ("font license", "selfdrive/ui/sunnypilot/mici/korean/fonts/OFL.txt")):
+      path = Path(BASEDIR) / name
+      if not path.is_file():
+        continue
+      body = '<h1>' + escape(title) + '</h1>' + ''.join('<p>' + escape(p) + '</p>' for p in path.read_text().split('\n\n'))
+      btn = BigButton(title.replace(" license", "\nlicense"), "read original notice")
+      btn.set_click_callback(lambda text=body: gui_app.push_widget(LicenseTextPage(text)))
+      self._scroller.add_widget(btn)
+
+
 class TermsPage(Scroller):
   def __init__(self, on_accept, on_decline):
     super().__init__()
 
-    self._accept_button = BigConfirmationCircleButton("accept\nterms", gui_app.texture("icons_mici/setup/driver_monitoring/dm_check.png", 64, 64), on_accept)
-    self._decline_button = BigConfirmationCircleButton("decline &\nuninstall", gui_app.texture("icons_mici/setup/cancel.png", 64, 64), on_decline,
+    self._accept_button = BigConfirmationCircleButton("I understand" if koranipilot_enabled() else "accept\nterms", gui_app.texture("icons_mici/setup/driver_monitoring/dm_check.png", 64, 64), on_accept)
+    self._decline_button = BigConfirmationCircleButton("exit & uninstall" if koranipilot_enabled() else "decline &\nuninstall", gui_app.texture("icons_mici/setup/cancel.png", 64, 64), on_decline,
                                                        red=True, exit_on_confirm=False)
 
     self._terms_header = GreyBigButton("terms of\nservice", "scroll to continue",
                                        gui_app.texture("icons_mici/setup/green_info.png", 64, 64))
     self._must_accept_card = GreyBigButton("", "You must accept the Terms of Service to use sunnypilot.")
 
-    self._scroller.add_widgets([
-      self._terms_header,
-      GreyBigButton("swipe for QR code", "or go to https://sunnypilot.ai/terms",
-                    gui_app.texture("icons_mici/setup/small_slider/slider_arrow.png", 64, 56, flip_x=True)),
-      QRCodeWidget("https://sunnypilot.ai/terms"),
-      self._must_accept_card,
-      self._accept_button,
-      self._decline_button,
-    ])
+    if koranipilot_enabled():
+      self._terms_header.set_text("Koranipilot")
+      self._terms_header.set_value("usage guide")
+      self._must_accept_card.set_value("Read the guide, then\nconfirm to continue.")
+      licenses = BigButton("open source", "licenses & credits")
+      licenses.set_click_callback(lambda: gui_app.push_widget(OpenSourcePage()))
+      self._scroller.add_widgets([
+        self._terms_header,
+        GreyBigButton("home test build", "Phone pairing test.\nNot road-validated."),
+        GreyBigButton("driver assistance", "Watch the road.\nReady to take over."),
+        GreyBigButton("phone connection", "Use phone hotspot.\nScan QR on C4."),
+        GreyBigButton("approve on C4", "Confirm the request.\nNo code typing."),
+        GreyBigButton("local connection", "No cloud account\nfor phone pairing."),
+        GreyBigButton("comma services", "Separate terms for\noptional services."),
+        licenses,
+        self._must_accept_card, self._accept_button, self._decline_button,
+      ])
+    else:
+      self._scroller.add_widgets([
+        self._terms_header,
+        GreyBigButton("swipe for QR code", "or go to https://sunnypilot.ai/terms",
+                      gui_app.texture("icons_mici/setup/small_slider/slider_arrow.png", 64, 56, flip_x=True)),
+        QRCodeWidget("https://sunnypilot.ai/terms"),
+        self._must_accept_card,
+        self._accept_button,
+        self._decline_button,
+      ])
 
   def _render(self, _):
     rl.draw_rectangle_rec(self._rect, rl.BLACK)
@@ -343,10 +395,9 @@ class OnboardingWindow(Widget):
   def __init__(self, completed_callback: Callable[[], None]):
     super().__init__()
     self._completed_callback = completed_callback
-    self._accepted_terms: bool = (ui_state.params.get("HasAcceptedTerms") == terms_version and
-                                  ui_state.params.get("HasAcceptedTermsSP") == terms_version_sp)
+    self._accepted_terms: bool = all(accepted_notices(ui_state.params, terms_version, terms_version_sp))
     self._training_done: bool = ui_state.params.get("CompletedTrainingVersion") == training_version
-    self._sunnylink_consent_done: bool = ui_state.params.get("CompletedSunnylinkConsentVersion") in {
+    self._sunnylink_consent_done: bool = koranipilot_enabled() or ui_state.params.get("CompletedSunnylinkConsentVersion") in {
       sunnylink_consent_version, sunnylink_consent_declined
     }
 
@@ -356,7 +407,7 @@ class OnboardingWindow(Widget):
     self._terms = TermsPage(on_accept=self._on_terms_accepted, on_decline=self._on_uninstall)
     self._terms.set_enabled(lambda: self.enabled)  # for nav stack
 
-    self._sunnylink_consent = SunnylinkConsentPage(
+    self._sunnylink_consent = None if koranipilot_enabled() else SunnylinkConsentPage(
       on_accept=self._on_sunnylink_accepted,
       on_decline=self._on_sunnylink_declined,
     )
@@ -390,8 +441,9 @@ class OnboardingWindow(Widget):
     self._completed_callback()
 
   def _on_terms_accepted(self):
-    ui_state.params.put("HasAcceptedTerms", terms_version, block=True)
-    ui_state.params.put("HasAcceptedTermsSP", terms_version_sp, block=True)
+    version, version_sp = notice_versions(terms_version, terms_version_sp)
+    ui_state.params.put("HasAcceptedTerms", version, block=True)
+    ui_state.params.put("HasAcceptedTermsSP", version_sp, block=True)
     self._accepted_terms = True
     if not self._sunnylink_consent_done:
       gui_app.push_widget(self._sunnylink_consent)
