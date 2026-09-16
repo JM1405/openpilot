@@ -24,7 +24,11 @@ class PhoneRoadPublisher:
       while not self.stop.is_set():
         # Sampling rechecks auth expiration/revocation. Never hold the auth lock
         # during IPC send or dataset access.
-        self.publisher.publish(self.service.road_input.sample())
+        with self.service.lock:
+          sample = self.service.road_input.sample()
+          owner = self.service.road_input.receiver.owner
+          route = self.service.route.hint(owner, sample.fix)
+        self.publisher.publish(sample, route)
         self.stop.wait(0.05)
     finally:
       try:

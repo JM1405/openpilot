@@ -79,4 +79,4 @@ class PhoneRoadInput:
 
   def view(self):
     item = self.sample()
-    return {"status": item.status, "valid": item.fix is not None, "uncertainty_ms": item.uncertainty_ns / 1e6, "scope": "development_live_input"}
+    return {"status": item.status, "valid": item.fix is not None, "uncertainty_ms": item.uncertainty_ns / 1e6, "scope": "observation_only", "control_enabled": False}

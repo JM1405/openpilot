@@ -24,6 +24,8 @@ def describe(state, gps_valid):
     reason = '도로 정보: 현재 도로 구분 대기'
   elif status in ('junctionUncertain', 'roadBoundaryUncertain'):
     reason = '도로 정보: 교차로·경계 확인 대기'
+  elif status.startswith('route'):
+    reason = '도로 정보: 경로·위치 재확인 중'
   elif status == 'unusableOrOldRoad':
     reason = '도로 정보: 이용 조건·기준일 확인'
   elif status in ('warmingUp', 'transitionConfirming', 'waitingForFreshFix'):

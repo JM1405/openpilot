@@ -20,6 +20,8 @@ if gui_app.sunnypilot_ui():
   if os.getenv('KOREAN_DRIVING_STATUS', '0') == '1':
     from openpilot.selfdrive.ui.sunnypilot.mici.korean.native_settings import DrivingSettingsRoot as SettingsLayout
     from openpilot.selfdrive.ui.sunnypilot.mici.korean.deceleration_onroad import DrivingStatusAugmentedRoadView as AugmentedRoadView
+  if os.getenv('KOREAN_PHONE_LOCAL', '0') == '1':
+    from openpilot.selfdrive.ui.sunnypilot.mici.korean.native_settings import PhoneSettingsRoot as SettingsLayout
   if os.getenv('KOREAN_ROAD_INPUT', '0') == '1':
     from openpilot.selfdrive.ui.sunnypilot.mici.korean.native_settings import PhoneSettingsRoot as SettingsLayout
     from openpilot.selfdrive.ui.sunnypilot.mici.korean.deceleration_onroad import RoadReasonAugmentedRoadView as AugmentedRoadView

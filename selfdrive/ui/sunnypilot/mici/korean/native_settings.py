@@ -161,7 +161,9 @@ class PhoneSettingsRoot(DrivingSettingsRoot):
     super().__init__()
     from openpilot.selfdrive.ui.sunnypilot.mici.korean.phone_runtime import PhoneRuntime
     from openpilot.selfdrive.ui.sunnypilot.mici.korean.native_phone import KoreanPhoneButton
-    self.phone_runtime = PhoneRuntime(ui_state.params)
+    self.phone_runtime = PhoneRuntime(ui_state.params,
+      allow_model_change=os.getenv('KOREAN_PHONE_MODEL_CHANGE', '0') == '1',
+      allow_settings_change=os.getenv('KOREAN_PHONE_SETTINGS_WRITE', '0') == '1')
     self._update_phone()
     gui_app.add_nav_stack_tick(self._update_phone)
     atexit.register(self.close_phone)
@@ -176,11 +178,19 @@ class PhoneSettingsRoot(DrivingSettingsRoot):
           keyfile=os.environ['KOREAN_PHONE_KEY']))
       except (OSError, ValueError, KeyError):
         self.phone_runtime.network_error = '폰 연결 설정을 확인해 줘'
-    from openpilot.sunnypilot.selfdrive.controls.lib.road_constraints.runtime import enabled as road_input_enabled
-    if road_input_enabled():
+    elif os.getenv('KOREAN_PHONE_LOCAL', '0') == '1':
       try:
-        self.phone_runtime.attach_road_publisher()
-      except Exception:
+        from openpilot.selfdrive.ui.sunnypilot.mici.korean.phone_transport import local_phone_transport
+        self.phone_runtime.attach(local_phone_transport(self.phone_runtime.service,
+          port=int(os.getenv('KOREAN_PHONE_PORT', '7443'))))
+      except (OSError, ValueError):
+        self.phone_runtime.network_error = 'Wi-Fi 주소나 폰 연결 인증서를 확인해 줘'
+    if self.phone_runtime.road_input_available:
+      try:
+        from openpilot.sunnypilot.selfdrive.controls.lib.road_constraints.runtime import enabled as road_input_enabled
+        if road_input_enabled():
+          self.phone_runtime.attach_road_publisher()
+      except (ImportError, OSError, RuntimeError):
         self.phone_runtime.network_error = '도로 입력 전달 서비스를 확인해 줘'
     self._scroller.add_widget(KoreanPhoneButton(self.phone_runtime))
     self._scroller._items.insert(0, self._scroller._items.pop())

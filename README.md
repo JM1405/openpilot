@@ -1,13 +1,12 @@
 # Koranipilot (고라니파일럿)
 
-> [!CAUTION]
-> **EXPERIMENTAL B0 BOOT CANDIDATE — NOT A DRIVING RELEASE**
+> **EXPERIMENTAL B1 HOME RECEPTION — NOT A DRIVING RELEASE**
 >
-> 이 브랜치는 개인 장치 검증을 위한 초기 부팅 후보야. comma four 부팅, 주차 차량 상태, 관찰 주행, 제어 동작을 아직 검증하지 않았어. Koranipilot 추가 기능은 모두 기본 OFF이며, 원본 복원 경로를 준비한 정차 상태의 부팅 확인 외에는 사용하지 마.
->
-> This branch is an early boot candidate for personal device validation. It has not been validated on a comma four, in a parked vehicle, during observation drives, or for control. All Koranipilot additions are disabled by default. Do not use it for on-road driving; install it only for stationary boot validation with the upstream restore path ready.
+> C4 집 테스트용이야. 폰 연결 메뉴/HTTPS가 켜지며 집 수신은 C4에서 직접 켜야 해.
+> 폰 설정·모델 변경과 도로 입력은 꺼져 있어. 실제 C4 부팅/무선 수신은 미검증이야.
+> Home test only. Phone reception is opt-in on device. No device or road validation yet.
 
-Validation base: sunnypilot `release-mici` `6a17f75c6bcb67c85f252a1acc342d94d5b8a4d2`. Restore URL: `install.sunnypilot.ai/release-mici`.
+[Install, test and return to sunnypilot](KORANIPILOT_HOME.md).
 
 ![](https://user-images.githubusercontent.com/47793918/233812617-beab2e71-57b9-479e-8bff-c3931347ca40.png)
 

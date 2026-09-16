@@ -1,10 +1,15 @@
 """Phone-only HTTPS transport. Approval exists only on the native device UI."""
 import hashlib
+import ipaddress
 import json
+import os
+import socket
 import ssl
 import threading
+from datetime import datetime, timedelta, timezone
 from http.cookies import CookieError, SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 
 from openpilot.selfdrive.ui.sunnypilot.mici.korean.phone_settings import PhoneError, SESSION_TTL, digest
 from openpilot.selfdrive.ui.sunnypilot.mici.korean.settings import SettingsError
@@ -58,7 +63,8 @@ class PhoneHandler(BaseHTTPRequestHandler):
         if len(lengths) != 1 or self.headers.get('Transfer-Encoding'):
           raise ValueError('length')
         length = int(lengths[0])
-        if not 0 < length <= 4096 or self.headers.get('Content-Type') != 'application/json':
+        body_limit = 196608 if self.path in ('/api/phone/route', '/api/phone/route/chunk') else 4096
+        if not 0 < length <= body_limit or self.headers.get('Content-Type') != 'application/json':
           raise ValueError('body')
         data = json.loads(self.rfile.read(length))
         if not isinstance(data, dict):
@@ -74,9 +80,21 @@ class PhoneHandler(BaseHTTPRequestHandler):
             return response(state, cookie=replacement)
           if self.path == '/api/phone/settings':
             return response(service.view(token))
+          if self.path == '/api/phone/overview':
+            return response(service.overview(token))
+          if self.path == '/api/phone/device':
+            service.session(token)
+            return response(service.management.device())
+          if self.path == '/api/phone/models':
+            service.session(token)
+            return response(service.management.models())
           if self.path == '/api/phone/navigation':
             service.session(token)
             return response(service.navigation.view())
+          if self.path == '/api/phone/kakao':
+            return response(service.kakao.challenge(token))
+          if self.path == '/api/phone/route':
+            return response(service.route.challenge(token))
           if self.path == '/api/phone/road':
             service.session(token)
             return response(service.road_input.view())
@@ -85,6 +103,8 @@ class PhoneHandler(BaseHTTPRequestHandler):
             return response(service.road_status.view())
           if self.path.startswith('/api/phone/changes/'):
             return response(service.result(token, self.path.rsplit('/', 1)[1]))
+          if self.path.startswith('/api/phone/model-changes/'):
+            return response(service.model_result(token, self.path.rsplit('/', 1)[1]))
         else:
           if self.path == '/api/phone/pair':
             if digest(token) in service.sessions:
@@ -96,13 +116,21 @@ class PhoneHandler(BaseHTTPRequestHandler):
             service.disconnect(token)
             return response({'state': 'disconnected'}, cookie='')
           if self.path == '/api/phone/logout':
-            service.authorize_write(token, self.headers.get('X-CSRF-Token'))
+            service.authorize_write(token, self.headers.get('X-CSRF-Token'), observation=True)
             service.disconnect(token)
             return response({'state': 'disconnected'}, cookie='')
           if self.path == '/api/phone/changes':
             return response(service.change(token, self.headers.get('X-CSRF-Token'), data))
+          if self.path == '/api/phone/models':
+            return response(service.model_change(token, self.headers.get('X-CSRF-Token'), data))
           if self.path == '/api/phone/navigation':
             return response(service.navigation.accept(token, self.headers.get('X-CSRF-Token'), data))
+          if self.path == '/api/phone/kakao':
+            return response(service.kakao.accept(token, self.headers.get('X-CSRF-Token'), data))
+          if self.path == '/api/phone/route':
+            return response(service.route.accept(token, self.headers.get('X-CSRF-Token'), data))
+          if self.path == '/api/phone/route/chunk':
+            return response(service.route.chunk(token, self.headers.get('X-CSRF-Token'), data))
           if self.path in ('/api/phone/road/sync', '/api/phone/road/commit', '/api/phone/road/fix', '/api/phone/road/stop'):
             return response(service.road_input.accept(token, self.headers.get('X-CSRF-Token'), self.path.rsplit('/', 1)[1], data))
         return response({'error': 'Not found'}, 404)
@@ -176,3 +204,65 @@ class PhoneTransport:
       self.server.server_close()
       self.thread.join(timeout=2)
       self.closed = True
+
+
+def local_ipv4(interface_names=('wlan0', 'eth0')):
+  """Resolve a LAN address without contacting an external host."""
+  try:
+    import fcntl
+    import struct
+    for name in interface_names:
+      try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+          packed = struct.pack('256s', name[:15].encode())
+          address = socket.inet_ntoa(fcntl.ioctl(sock.fileno(), 0x8915, packed)[20:24])
+          parsed = ipaddress.ip_address(address)
+          if parsed.is_private and not parsed.is_loopback:
+            return address
+      except OSError:
+        continue
+  except ImportError:
+    pass
+  raise OSError('같은 Wi-Fi의 기기 주소를 확인하지 못했어')
+
+
+def ensure_tls_identity(directory, address):
+  """Create a per-address pinned certificate in persistent device storage."""
+  from cryptography import x509
+  from cryptography.hazmat.primitives import hashes, serialization
+  from cryptography.hazmat.primitives.asymmetric import ec
+  from cryptography.x509.oid import NameOID
+
+  ip = ipaddress.ip_address(address)
+  root = Path(directory)
+  root.mkdir(parents=True, exist_ok=True, mode=0o700)
+  suffix = address.replace(':', '_').replace('.', '_')
+  cert_path, key_path = root / f'phone-{suffix}.crt', root / f'phone-{suffix}.key'
+  if cert_path.exists() and key_path.exists():
+    return str(cert_path), str(key_path)
+  key = ec.generate_private_key(ec.SECP256R1())
+  name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, 'Koranipilot local device')])
+  now = datetime.now(timezone.utc)
+  cert = (x509.CertificateBuilder().subject_name(name).issuer_name(name).public_key(key.public_key())
+          .serial_number(x509.random_serial_number()).not_valid_before(now - timedelta(days=1))
+          .not_valid_after(now + timedelta(days=3650))
+          .add_extension(x509.SubjectAlternativeName([x509.IPAddress(ip)]), critical=False)
+          .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+          .sign(key, hashes.SHA256()))
+  writes = ((key_path, key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+                                         serialization.NoEncryption()), 0o600),
+            (cert_path, cert.public_bytes(serialization.Encoding.PEM), 0o644))
+  for path, content, mode in writes:
+    temporary = path.with_suffix(path.suffix + f'.{os.getpid()}.tmp')
+    temporary.write_bytes(content)
+    os.chmod(temporary, mode)
+    os.replace(temporary, path)
+  return str(cert_path), str(key_path)
+
+
+def local_phone_transport(service, *, address=None, port=7443, identity_root=None):
+  from openpilot.system.hardware.hw import Paths
+  address = address or local_ipv4()
+  root = identity_root or str(Path(Paths.persist_root()) / 'koranipilot' / 'phone_tls')
+  cert, key = ensure_tls_identity(root, address)
+  return PhoneTransport(service, host=address, port=port, authority=f'{address}:{port}', certfile=cert, keyfile=key)

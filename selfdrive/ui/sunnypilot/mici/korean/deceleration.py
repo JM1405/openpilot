@@ -43,6 +43,9 @@ def explain(report, now, *, metric=True):
   input_fresh = (report.status in ('constraint', 'clear', 'approaching') and math.isfinite(report.inputValidUntil)
                  and now < report.inputValidUntil <= report.plannedAt + .21)
   candidate = report.hasCandidate and report.status == 'constraint' and input_fresh
+  if getattr(report, 'observationOnly', False):
+    return DecelerationStatus('observation', '도로 후보 관찰',
+      (KINDS.get(report.kind, '도로') + ' 후보 · 제어 미적용') if candidate else '도로 입력 확인 대기')
   if source == 'road':
     if not report.hasCandidate:
       return WAITING

@@ -6,6 +6,7 @@ from openpilot.system.ui.lib.application import gui_app
 from openpilot.selfdrive.ui.sunnypilot.mici.korean import drawing
 from openpilot.selfdrive.ui.sunnypilot.mici.korean.phone_settings import PhoneError
 from openpilot.selfdrive.ui.sunnypilot.mici.korean.settings import SettingsError
+from openpilot.selfdrive.ui.sunnypilot.mici.korean.phone_home import HOME_MODE
 
 
 def text(value, x, y, size=16, color=(243, 248, 246, 255)):
@@ -30,16 +31,17 @@ class KoreanPhonePage(Widget):
     drawing.begin_frame()
     drawing.draw_rectangle(0, 0, 536, 240, drawing.Color(8, 17, 19, 255))
     text('‹ 뒤로', 16, 10, 19)
-    text('연결된 폰' if self.connections else '폰 연결', 215, 10, 21)
+    text('집 수신' if state['mode'] == HOME_MODE else '연결된 폰' if self.connections else '폰 연결', 215, 10, 21)
+    text('모드 ›', 445, 10, 17, (85, 222, 170, 255))
     if self.connections:
-      from openpilot.sunnypilot.selfdrive.controls.lib.road_constraints.runtime import enabled as road_input_enabled
-      if road_input_enabled():
+      if self.runtime.road_publisher is not None:
         location = service.road_input.view()
-        text('GPS 위치 수신' if location['valid'] else 'GPS 위치 입력 대기', 20, 187, 14)
+        text('폰 경로 ›', 20, 187, 14, (85, 222, 170, 255))
         text('도로 상태 ›', 402, 187, 14, (85, 222, 170, 255))
       else:
-        nav = service.navigation.view()
-        text('티맵 안내 수신' if nav['valid'] else '티맵 안내 미확인', 20, 187, 14)
+        kakao = service.kakao.view()
+        text('폰 경로 ›', 20, 187, 14, (85, 222, 170, 255))
+        text('카카오 수신 ›', 402, 187, 14, (85, 222, 170, 255))
       if not state['sessions']:
         text('연결된 폰이 없어', 20, 83, 20)
       for i, session in enumerate(state['sessions']):
@@ -68,19 +70,28 @@ class KoreanPhonePage(Widget):
         text(f"{state['window']['remaining']}초 남음", 230, 145, 15)
         text('새 코드', 425, 179, 17)
       else:
-        text('주차한 뒤 연결 코드를 열어줘', 20, 139, 18)
+        prompt = '집 테스트 / 수신 전용' if state['home_active'] else state['reason'] if state['mode'] == HOME_MODE else '주차한 뒤 연결 코드를 열어줘'
+        text(prompt, 20, 139, 16)
         text('코드 열기', 415, 179, 17, (85, 222, 170, 255))
-    text(self.message[:36], 20, 215, 12, (255, 201, 113, 255))
+    text((self.message or ('수신 전용 / 설정·모델·제어 차단' if state['mode'] == HOME_MODE else ''))[:36],
+         20, 215, 12, (255, 201, 113, 255))
     text('새 폰 연결' if self.connections else '연결 관리', 425, 215, 14)
     drawing.render_native(drawing.commands(), offset=(self.rect.x, self.rect.y))
 
   def _handle_mouse_release(self, pos):
     x, y = pos.x-self.rect.x, pos.y-self.rect.y
-    if self.connections and x >= 385 and 181 <= y < 208:
-      from openpilot.sunnypilot.selfdrive.controls.lib.road_constraints.runtime import enabled
-      if enabled():
-        gui_app.push_widget(RoadStatusPage(self.runtime))
-        return
+    if x >= 420 and 0 <= y < 40:
+      gui_app.push_widget(HomeReceivePage(self.runtime))
+      return
+    if self.connections and x < 200 and 181 <= y < 208:
+      gui_app.push_widget(RouteStatusPage(self.runtime))
+      return
+    if self.connections and self.runtime.road_publisher is not None and x >= 385 and 181 <= y < 208:
+      gui_app.push_widget(RoadStatusPage(self.runtime))
+      return
+    if self.connections and self.runtime.road_publisher is None and x >= 385 and 181 <= y < 208:
+      gui_app.push_widget(KakaoStatusPage(self.runtime))
+      return
     if x<110 and y<40:
       self.dismiss()
       return
@@ -110,6 +121,97 @@ class KoreanPhonePage(Widget):
             self.message = ''
     except (PhoneError, SettingsError) as exc:
       self.message = str(exc)
+
+
+class HomeReceivePage(Widget):
+  """Explicit local consent; switching always clears all phone approvals."""
+  def __init__(self, runtime):
+    super().__init__()
+    self.runtime, self.message = runtime, ''
+    self.set_rect(rl.Rectangle(0, 0, 536, 240))
+
+  def _render(self, _):
+    state = self.runtime.service.mode_view()
+    drawing.begin_frame()
+    drawing.draw_rectangle(0, 0, 536, 240, drawing.Color(8, 17, 19, 255))
+    text('‹ 뒤로', 16, 10, 19)
+    text('집 테스트 / 수신 전용', 178, 10, 20)
+    text('집 수신 켜짐' if state['home_active'] else '집 수신 중지' if state['mode'] == HOME_MODE else '차량 연결 모드', 20, 49, 19)
+    text('폰 연결 / 카카오 자료만 확인해', 20, 80, 17)
+    text('설정·모델 변경 / 제어 입력은 차단해', 20, 108, 17)
+    text('전환·상태 단절 시 모든 폰 승인을 해제해', 20, 137, 16)
+    text('차량 모드로', 20, 177, 19)
+    text('집 수신 켜기', 370, 177, 19, (85, 222, 170, 255))
+    reason = state['reason'] or ('' if state['home_available'] else self.runtime.home_check())
+    text((self.message or reason or '재시작 후에는 다시 켜고 새 코드로 연결해')[:42], 20, 215, 12, (255, 201, 113, 255))
+    drawing.render_native(drawing.commands(), offset=(self.rect.x, self.rect.y))
+
+  def _handle_mouse_release(self, pos):
+    x, y = pos.x-self.rect.x, pos.y-self.rect.y
+    if x < 110 and y < 40:
+      self.dismiss()
+    elif 168 <= y < 208 and (x < 185 or x >= 345):
+      try:
+        self.runtime.service.device_set_home(x >= 345)
+        self.message = '전환했어. 뒤로 가서 새 연결 코드를 열어줘'
+      except (PhoneError, SettingsError) as exc:
+        self.message = str(exc)
+
+
+class KakaoStatusPage(Widget):
+  def __init__(self, runtime):
+    super().__init__()
+    self.runtime = runtime
+    self.set_rect(rl.Rectangle(0, 0, 536, 240))
+
+  def _render(self, _):
+    state = self.runtime.service.kakao.view()
+    drawing.begin_frame()
+    drawing.draw_rectangle(0, 0, 536, 240, drawing.Color(8, 17, 19, 255))
+    text('‹ 뒤로', 16, 10, 19)
+    home = self.runtime.service.mode == HOME_MODE
+    text('집 테스트 / 카카오 수신' if home else '카카오 수신', 175 if home else 215, 10, 20)
+    text(state['reason'], 20, 49, 16)
+    counts = {kind: sum(e['kind'] == kind for e in state['events']) for kind in ('camera', 'section', 'bump', 'sharp_turn')}
+    text(f"단속 {counts['camera']} / 구간 {counts['section']} / 방지턱 {counts['bump']} / 급커브 {counts['sharp_turn']}", 20, 84, 16)
+    text('GPS 유효' if state['location_fresh'] else 'GPS 대기 / 만료', 20, 119, 16)
+    text('전방 도로 / 코너 속도 확인 전', 20, 154, 16)
+    text('수신 확인용 / 자동 감속 연결 안 됨', 20, 204, 15, (255, 201, 113, 255))
+    drawing.render_native(drawing.commands(), offset=(self.rect.x, self.rect.y))
+
+  def _handle_mouse_release(self, pos):
+    if pos.x-self.rect.x < 110 and pos.y-self.rect.y < 40:
+      self.dismiss()
+
+
+class RouteStatusPage(Widget):
+  def __init__(self, runtime):
+    super().__init__()
+    self.runtime = runtime
+    self.set_rect(rl.Rectangle(0, 0, 536, 240))
+
+  def _render(self, _):
+    state = self.runtime.service.route.view()
+    drawing.begin_frame()
+    drawing.draw_rectangle(0, 0, 536, 240, drawing.Color(8, 17, 19, 255))
+    text('‹ 뒤로', 16, 10, 19)
+    text('폰 경로', 220, 10, 21)
+    text(state['destination'][:26] or '목적지 대기', 20, 54, 21)
+    text(state['reason'], 20, 91, 17)
+    if state['remaining_m'] is not None and state['remaining_s'] is not None:
+      text(f"{state['remaining_m']/1000:.1f} km / {(state['remaining_s']+59)//60:.0f}분", 20, 127, 20)
+    turn = state.get('turn')
+    if turn:
+      dist = f"{turn['distance_m']/1000:.1f} km" if turn['distance_m'] >= 1000 else f"{turn['distance_m']:.0f} m"
+      text(f"{dist} / {turn['label']}", 20, 166, 20, (85, 222, 170, 255))
+    else:
+      text(f"경로 좌표 {state['point_count']}개" if state['point_count'] else '경로 형상 대기 / 보류', 20, 166, 15)
+    text('표시 전용 / 차량 제어 미적용', 20, 212, 14, (255, 201, 113, 255))
+    drawing.render_native(drawing.commands(), offset=(self.rect.x, self.rect.y))
+
+  def _handle_mouse_release(self, pos):
+    if pos.x-self.rect.x < 110 and pos.y-self.rect.y < 40:
+      self.dismiss()
 
 
 class RoadStatusPage(Widget):

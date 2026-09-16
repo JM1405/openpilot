@@ -78,9 +78,11 @@ class SettingsError(ValueError):
 
 
 class SettingsController:
-  def __init__(self, store, inputs):
+  def __init__(self, store, inputs, *, write_enabled=True):
     self.store = store  # Params-compatible get/put_bool; PC uses an isolated JSON store
     self.inputs = inputs  # reevaluated on every read and save
+    self.write_enabled = bool(write_enabled)
+    self.write_guard = lambda: ''
     self.lock = threading.RLock()
 
   def saved(self):
@@ -100,8 +102,12 @@ class SettingsController:
     return hashlib.sha256(json.dumps(values, sort_keys=True).encode()).hexdigest()[:24]
 
   def block_reason(self, name, state):
+    if reason := self.write_guard():
+      return reason
     if state['reason']:
       return state['reason']
+    if not self.write_enabled:
+      return '초기 주차 확인은 읽기 전용이야'
     cp = state['cp']
     if not cp:
       return '현재 차량 구성을 확인할 수 없어'
@@ -113,6 +119,23 @@ class SettingsController:
     if name == 'mode' and state['values']['owner'] is not True:
       return '콤마 크루즈 적용을 확인한 뒤 선택할 수 있어'
     return ''
+
+  @staticmethod
+  def supported(name, state):
+    """Return only capabilities confirmed by the current vehicle snapshot.
+
+    A missing/stale CarParams snapshot is unknown, not an invitation to expose
+    a setting. The phone UI uses this field to hide unsupported rows while the
+    device API still returns the row for diagnostics.
+    """
+    cp = state['cp']
+    if not cp:
+      return False
+    if name == 'owner':
+      return cp.get('brand') == 'hyundai' and cp.get('alphaLongitudinalAvailable') is True
+    if name == 'mode':
+      return cp.get('openpilotLongitudinalControl') is True or cp.get('alphaLongitudinalAvailable') is True
+    return name == 'mads'
 
   def view(self):
     with self.lock:
@@ -132,9 +155,11 @@ class SettingsController:
           status = '현재 반영 확인'
         else:
           status = '재시작 필요' if spec['restart'] else '반영 대기'
-        blocked = self.block_reason(name, state)
+        supported = self.supported(name, state)
+        blocked = self.block_reason(name, state) if supported else '현재 차량에서 지원 여부를 확인할 수 없어'
         rows.append({'id': name, **{k: v for k, v in spec.items() if k != 'key'}, 'saved': saved,
-                     'current': actual, 'status': status, 'editable': not blocked, 'blocked_reason': blocked,
+                     'current': actual, 'status': status, 'supported': supported,
+                     'editable': supported and not blocked, 'blocked_reason': blocked,
                      'notices': notices(name)})
       return {'revision': self.revision(values), 'parked': state['parked'], 'reason': state['reason'],
               'lateral_active': state['lateral_active'], 'rows': rows}
