@@ -1,3 +1,5 @@
+import os
+
 import pyray as rl
 import cereal.messaging as messaging
 from openpilot.selfdrive.ui.mici.layouts.home import MiciHomeLayout
@@ -13,6 +15,17 @@ from openpilot.system.ui.lib.application import gui_app
 
 if gui_app.sunnypilot_ui():
   from openpilot.selfdrive.ui.sunnypilot.mici.layouts.settings import SettingsLayoutSP as SettingsLayout
+  # Device A/B candidates ship the Korean UI code without changing the normal
+  # release-mici path. Each layer is enabled explicitly at a later gate.
+  if os.getenv('KOREAN_DRIVING_STATUS', '0') == '1':
+    from openpilot.selfdrive.ui.sunnypilot.mici.korean.native_settings import DrivingSettingsRoot as SettingsLayout
+    from openpilot.selfdrive.ui.sunnypilot.mici.korean.deceleration_onroad import DrivingStatusAugmentedRoadView as AugmentedRoadView
+  if os.getenv('KOREAN_ROAD_INPUT', '0') == '1':
+    from openpilot.selfdrive.ui.sunnypilot.mici.korean.native_settings import PhoneSettingsRoot as SettingsLayout
+    from openpilot.selfdrive.ui.sunnypilot.mici.korean.deceleration_onroad import RoadReasonAugmentedRoadView as AugmentedRoadView
+  if os.getenv('KOREAN_MICI_UI', '0') == '1':
+    from openpilot.selfdrive.ui.sunnypilot.mici.korean.onroad import KoreanAugmentedRoadView as AugmentedRoadView
+    from openpilot.selfdrive.ui.sunnypilot.mici.korean.native_settings import KoreanSettingsRoot as SettingsLayout
 
 ONROAD_DELAY = 2.5  # seconds
 
