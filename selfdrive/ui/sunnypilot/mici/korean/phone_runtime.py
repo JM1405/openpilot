@@ -133,6 +133,23 @@ class PhoneRuntime:
     self.network_error = ''
     self.closed = False
 
+  def retry_local_transport(self):
+    """Explicit retry after Wi-Fi becomes available; no pairing or Params writes."""
+    if self.closed or self.transport is not None:
+      return False
+    import os
+    if os.getenv('KOREAN_PHONE_LOCAL', '0') != '1':
+      self.network_error = '폰 연결 설정을 확인해 줘'
+      return False
+    try:
+      from openpilot.selfdrive.ui.sunnypilot.mici.korean.phone_transport import local_phone_transport
+      self.attach(local_phone_transport(self.service, port=int(os.getenv('KOREAN_PHONE_PORT', '7443'))))
+      self.network_error = ''
+      return True
+    except (OSError, ValueError, ImportError):
+      self.network_error = 'Wi-Fi 주소나 폰 연결 인증서를 확인해 줘'
+      return False
+
   def update(self, sm, started_frame=0, release=False):
     with self.service.lock:
       if not self.closed:

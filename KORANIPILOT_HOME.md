@@ -10,7 +10,15 @@ after this branch has been published. This is a separate branch; B0 is unchanged
 After boot, open settings → **폰 연결** → **모드** → **집 수신 켜기**.
 Home reception is never enabled automatically and must be selected again after
 restart or loss of the required device/panda state. Approve pairing on the C4.
-Use the Android manager v0.11 route-aware build on the same network.
+Use Android manager v0.12-qr-pairing on the same network. On the C4, choose
+**QR로 폰 연결**. In the phone app choose **C4 연결하기**, allow camera access
+when prompted and scan the C4 QR. Confirm **연결 요청** on the phone, then
+**승인** on the C4. No address, 64-character fingerprint or code typing is needed.
+The QR carries the complete TLS certificate pin and one-use pairing code. It
+expires with the pairing window/device state; scanning never grants approval.
+If Wi-Fi was unavailable at UI startup, **다시 확인** retries local address/TLS setup.
+The main pairing/approval/home controls use 24–30 px text and 48–66 px tall targets.
+Physical C4 display readability and real phone camera scanning remain unverified.
 
 ## Scope
 

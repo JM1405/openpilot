@@ -179,12 +179,7 @@ class PhoneSettingsRoot(DrivingSettingsRoot):
       except (OSError, ValueError, KeyError):
         self.phone_runtime.network_error = '폰 연결 설정을 확인해 줘'
     elif os.getenv('KOREAN_PHONE_LOCAL', '0') == '1':
-      try:
-        from openpilot.selfdrive.ui.sunnypilot.mici.korean.phone_transport import local_phone_transport
-        self.phone_runtime.attach(local_phone_transport(self.phone_runtime.service,
-          port=int(os.getenv('KOREAN_PHONE_PORT', '7443'))))
-      except (OSError, ValueError):
-        self.phone_runtime.network_error = 'Wi-Fi 주소나 폰 연결 인증서를 확인해 줘'
+      self.phone_runtime.retry_local_transport()
     if self.phone_runtime.road_input_available:
       try:
         from openpilot.sunnypilot.selfdrive.controls.lib.road_constraints.runtime import enabled as road_input_enabled

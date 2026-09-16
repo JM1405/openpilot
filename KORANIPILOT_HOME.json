@@ -84,10 +84,24 @@
   "device_boot_verified": false,
   "phone_wireless_verified": false,
   "apk": {
-    "path": "research/2026-09-17-route-aware/koranipilot-manager-route-aware-debug.apk",
-    "sha256": "6e49d0985f1bf57704d9556699042ac8b63c576a689bf39c63a9c841aef61a09",
-    "version_code": 11,
-    "version_name": "0.11-route-aware",
+    "path": "research/2026-09-17-qr-pairing/koranipilot-manager-qr-pairing-debug.apk",
+    "sha256": "2455c1576ef1050b48881c56b43761e701996d3e4784cad26b8a634147418b60",
+    "version_code": 12,
+    "version_name": "0.12-qr-pairing",
     "package": "dev.koranipilot.manager"
+  },
+  "qr_revision": {
+    "files": {
+      "native_phone.py": "d5a638ac43a64bef660ffac013fbba91b0013edc64ce5c919076e46cab0177a5",
+      "native_settings.py": "64198908536b2b3364b0d14605bf53a090d6125bb7ce4f2d2138bf25cb43144d",
+      "phone_runtime.py": "821a1a50c20e44c1f825bc24dbe09b6063da60d19dfa9c605c7962bffdf452a6",
+      "phone_pairing.py": "6f5240515fbcbbb2172a556a7e833efcc51d69757066bbfb526137bc9e27d438",
+      "tests/test_phone_pairing.py": "6f2ad55f3ee4d15b1c8a5e90b19d33aedcf7b7b4715e8efce77c5ff28124a149"
+    },
+    "phone_pairing": "local QR with full certificate pin; explicit request and C4 consent",
+    "python_tests": 75,
+    "android_jvm_tests": 47,
+    "android_synthetic_scan_flow_checks": 11,
+    "physical_camera_scan_verified": false
   }
 }
