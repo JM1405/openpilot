@@ -16,7 +16,7 @@ from openpilot.selfdrive.ui.sunnypilot.mici.korean.phone_home import HOME_MODE, 
 from openpilot.selfdrive.ui.sunnypilot.mici.korean.road_status import RoadStatusMonitor
 from openpilot.selfdrive.ui.sunnypilot.mici.korean.settings import SettingsController, observed
 
-SERVICES = ('carState', 'carControl', 'selfdriveState', 'selfdriveStateSP', 'carParams', 'longitudinalPlanSP',
+SERVICES = ('carState', 'carControl', 'selfdriveState', 'selfdriveStateSP', 'carParams', 'carParamsSP', 'longitudinalPlanSP',
             'deviceState', 'modelManagerSP', 'pandaStates')
 
 
@@ -107,10 +107,12 @@ class RuntimeInputs:
 
 
 class PhoneRuntime:
-  def __init__(self, store, *, clock=time.monotonic, allow_model_change=False, allow_settings_change=True, address_provider=None):
+  def __init__(self, store, *, clock=time.monotonic, allow_model_change=False, allow_settings_change=True, address_provider=None, quickboot_path=None):
     self.inputs = RuntimeInputs(clock)
     self.controller = SettingsController(store, self.inputs, write_enabled=allow_settings_change)
     self.service = PhoneSettings(self.controller, clock=clock, home_check=self.home_check)
+    from openpilot.selfdrive.ui.sunnypilot.mici.korean.phone_catalog import PhoneCatalog
+    self.service.catalog = PhoneCatalog(self.controller, quickboot_path=quickboot_path)
     self.controller.write_guard = self.service.write_block_reason
     self.service.management = PhoneManagement(store, self.controller, self.inputs.management,
                                                allow_model_change=allow_model_change, write_guard=self.service.write_block_reason)

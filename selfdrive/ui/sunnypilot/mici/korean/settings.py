@@ -65,7 +65,8 @@ def observed(sm, now, started_frame=0, *, release=False):
     mode = ss.get('experimentalMode')
     if dynamic and dynamic.get('dec', {}).get('active'):
       mode = dynamic['dec'].get('state') == 'blended'
-  return {'parked': not reason, 'reason': reason, 'cp': cp, 'release': release,
+  return {'parked': not reason, 'reason': reason, 'cp': cp,
+          'cp_sp': sample(sm, 'carParamsSP', now, started_frame, static=True), 'release': release,
           'values': {'owner': owner, 'mode': mode, 'mads': sp.get('mads', {}).get('available') if sp else None},
           'dynamic': dynamic.get('dec', {}).get('active') if dynamic else None,
           'lateral_active': cc.get('latActive') if cc and vehicle_valid else None}

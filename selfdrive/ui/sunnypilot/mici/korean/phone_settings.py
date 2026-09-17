@@ -228,11 +228,18 @@ class PhoneSettings:
   def overview(self, token):
     with self.lock:
       self.session(token)
-      return {**self.management.overview(), 'settings': self.view(token), 'connection': self.mode_view(), 'road_input': self.road_input.view(), 'route': self.route.view()}
+      return {**self.management.overview(), 'settings': self.view(token), 'catalog_schema': 1 if hasattr(self, 'catalog') else 0,
+              'connection': self.mode_view(), 'road_input': self.road_input.view(), 'route': self.route.view()}
 
-  def change(self, token, csrf, request):
+  def catalog_view(self, token):
+    with self.lock:
+      self.session(token)
+      return self.catalog.view()
+
+  def change(self, token, csrf, request, *, catalog=False):
     with self.lock:
       session = self.authorize_write(token, csrf)
+      controller, kind = (self.catalog, 'catalog') if catalog else (self.controller, 'setting')
       if not isinstance(request, dict) or set(request) != {'request_id', 'id', 'value', 'revision', 'acknowledged'}:
         raise PhoneError('올바른 변경 요청이 아니야')
       request_id = request['request_id']
@@ -241,28 +248,28 @@ class PhoneSettings:
       fingerprint = digest(json.dumps(request, sort_keys=True, ensure_ascii=True))
       records = session['requests']
       if request_id in records:
-        if records[request_id]['fingerprint'] != fingerprint:
+        if records[request_id]['fingerprint'] != fingerprint or records[request_id].get('kind') != kind:
           raise PhoneError('같은 요청 번호에 다른 변경을 보낼 수 없어', 'request_conflict', 409)
         return dict(records[request_id]['receipt'])  # no second write, including failed/uncertain requests
       if len(records) >= MAX_REQUESTS:
         raise PhoneError('이 연결의 요청 한도에 도달했어. 연결을 새로 해줘', 'capacity', 429)
       receipt = {'request_id': request_id, 'id': request['id'], 'value': request['value']}
       try:
-        self.controller.save(request['id'], request['value'], request['revision'], acknowledged=request['acknowledged'] is True)
-        receipt.update(outcome='saved', message='저장값을 확인했어. 현재 반영 상태는 따로 확인해.')
+        controller.save(request['id'], request['value'], request['revision'], acknowledged=request['acknowledged'] is True)
+        receipt.update(outcome='saved', message='저장 완료 · 적용 상태 별도 확인' if catalog else '저장값을 확인했어. 현재 반영 상태는 따로 확인해.')
       except SettingsError as exc:
         receipt.update(outcome='unknown' if exc.code == 'storage' else 'rejected', code=exc.code, message=str(exc))
-      records[request_id] = {'kind': 'setting', 'fingerprint': fingerprint, 'receipt': receipt}
+      records[request_id] = {'kind': kind, 'fingerprint': fingerprint, 'receipt': receipt}
       return dict(receipt)
 
-  def result(self, token, request_id):
+  def result(self, token, request_id, *, catalog=False):
     with self.lock:
       session = self.session(token)
       record = session['requests'].get(request_id)
-      if not record or record.get('kind') != 'setting':
+      if not record or record.get('kind') != ('catalog' if catalog else 'setting'):
         raise PhoneError('이 연결에서 받은 요청을 찾지 못했어. 현재 저장값을 확인해', 'missing', 404)
       receipt = dict(record['receipt'])
-      view = self.controller.view()
+      view = self.catalog.view() if catalog else self.controller.view()
       row = next((r for r in view['rows'] if r['id'] == receipt['id']), None)
       return {'receipt': receipt, 'setting': row,
               'superseded': bool(row and receipt['outcome'] == 'saved' and row['saved'] != receipt['value'])}

@@ -10,6 +10,8 @@
 
 This revision keeps phone telemetry updates running when the C4 display sleeps. The original 1.5-second freshness gate and receive-only restrictions remain enforced. Local regression tests pass; physical C4 recovery still needs verification.
 
+Android manager v0.16 adds a searchable, typed catalog of 74 Sunny settings in 10 groups. This candidate exposes their saved values over the existing approved HTTPS session. Home mode remains read-only; vehicle writes remain disabled by the deployment flag. Nine incompatible C4 visual options, two deferred lane-change options and three vehicle test modes are explicitly locked. Local/Android tests do not establish physical C4 application or road validation.
+
 ![](https://user-images.githubusercontent.com/47793918/233812617-beab2e71-57b9-479e-8bff-c3931347ca40.png)
 
 ## 🌞 What is sunnypilot?

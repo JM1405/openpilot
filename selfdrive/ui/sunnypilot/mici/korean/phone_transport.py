@@ -81,6 +81,10 @@ class PhoneHandler(BaseHTTPRequestHandler):
             return response(state, cookie=replacement)
           if self.path == '/api/phone/settings':
             return response(service.view(token))
+          if self.path == '/api/phone/catalog':
+            return response(service.catalog_view(token))
+          if self.path.startswith('/api/phone/catalog-changes/'):
+            return response(service.result(token, self.path.rsplit('/', 1)[1], catalog=True))
           if self.path == '/api/phone/overview':
             return response(service.overview(token))
           if self.path == '/api/phone/device':
@@ -122,6 +126,8 @@ class PhoneHandler(BaseHTTPRequestHandler):
             return response({'state': 'disconnected'}, cookie='')
           if self.path == '/api/phone/changes':
             return response(service.change(token, self.headers.get('X-CSRF-Token'), data))
+          if self.path == '/api/phone/catalog-changes':
+            return response(service.change(token, self.headers.get('X-CSRF-Token'), data, catalog=True))
           if self.path == '/api/phone/models':
             return response(service.model_change(token, self.headers.get('X-CSRF-Token'), data))
           if self.path == '/api/phone/navigation':
