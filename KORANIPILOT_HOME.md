@@ -40,8 +40,20 @@ The existing storage keys use the separate `koranipilot-home-1` marker, not an
 upstream terms version. Hardware startup checks this same explicit marker;
 existing training, driver checks and other start conditions remain required.
 This changes the notice gate only, not driving planners, vehicle control or CAN.
-81 Python tests pass, including local TLS and source/widget-double flow tests.
+87 Python tests pass, including local TLS and source/widget-double flow tests.
 Actual C4 storage, screen rendering and wireless recovery remain unverified.
+
+## Wi-Fi address discovery repair
+
+C4 phone pairing now reads the connected Wi-Fi address from the same
+NetworkManager instance as the network settings card, instead of probing only
+`wlan0` and `eth0`. The initial IP is read even before the network page opens.
+Each explicit retry reads the current value. A disconnected, missing, public,
+link-local or loopback address never falls back to another interface or opens
+a listener. Existing TLS pinning and on-device approval remain required.
+The previous `Wi-Fi 주소를 확인해줘 / OSError` is the address-discovery stage;
+it does not prove a phone-hotspot restriction or a certificate-write failure.
+Actual C4 wireless recovery still requires testing after this update.
 
 ## Scope
 

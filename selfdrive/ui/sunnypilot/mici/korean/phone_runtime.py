@@ -107,7 +107,7 @@ class RuntimeInputs:
 
 
 class PhoneRuntime:
-  def __init__(self, store, *, clock=time.monotonic, allow_model_change=False, allow_settings_change=True):
+  def __init__(self, store, *, clock=time.monotonic, allow_model_change=False, allow_settings_change=True, address_provider=None):
     self.inputs = RuntimeInputs(clock)
     self.controller = SettingsController(store, self.inputs, write_enabled=allow_settings_change)
     self.service = PhoneSettings(self.controller, clock=clock, home_check=self.home_check)
@@ -131,6 +131,7 @@ class PhoneRuntime:
     self.transport = None
     self.road_publisher = None
     self.network_error = ''
+    self.address_provider = address_provider
     self.closed = False
 
   def retry_local_transport(self):
@@ -143,7 +144,8 @@ class PhoneRuntime:
       return False
     try:
       from openpilot.selfdrive.ui.sunnypilot.mici.korean.phone_transport import local_phone_transport
-      self.attach(local_phone_transport(self.service, port=int(os.getenv('KOREAN_PHONE_PORT', '7443'))))
+      self.attach(local_phone_transport(self.service, port=int(os.getenv('KOREAN_PHONE_PORT', '7443')),
+                                        address_provider=self.address_provider))
       self.network_error = ''
       return True
     except (OSError, ValueError, ImportError) as exc:

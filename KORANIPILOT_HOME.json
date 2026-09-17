@@ -132,6 +132,22 @@
     "sunnylink_disabled_in_home_profile": true,
     "hardwared_notice_gate_changed": true,
     "actual_c4_recovery_verified": false,
-    "android_apk_changed": false
+    "android_apk_changed": false,
+    "as_of_commit": "83cbb515df6967ca6492c14258fe8c5935c21bd3"
+  },
+  "network_address_revision": {
+    "base_commit": "83cbb515df6967ca6492c14258fe8c5935c21bd3",
+    "files": {
+      "selfdrive/ui/mici/layouts/settings/settings.py": "78940fbd94add8c9d8df3c0f5cb60ff10bacea6d711b262eb5243533edf86a7a",
+      "selfdrive/ui/mici/layouts/settings/network/network_layout.py": "f5fd4bd82230543128c1adbd4a3c2a1591d45cc16cf5dec536eace6a83d41d7e",
+      "selfdrive/ui/sunnypilot/mici/korean/native_settings.py": "0cf1a38be7411f525fa6e0c316380712e960bd8daf6f6643e29b95b8347f608d",
+      "selfdrive/ui/sunnypilot/mici/korean/phone_runtime.py": "4b9c7b3616c64d7b06dd7d11a003cc9d24f59acdd525211c7095b22b828285f1",
+      "selfdrive/ui/sunnypilot/mici/korean/phone_transport.py": "8e19a0c87fe39d37466621b02c3dd52e07973e29b2c8a1d22ed5cde342ce95bf",
+      "system/ui/lib/wifi_manager.py": "dfa2a92998f36ed086a25bfcf7f1e55c0818735bf4036f9a9f797254cdd56e0c",
+      "selfdrive/ui/sunnypilot/mici/korean/tests/test_phone_network.py": "b0b5a90bcdcea84d2512de1121d83ba160bf6fc3a4da22c402b7d7a1bf9be9c4"
+    },
+    "address_source": "same connected NetworkManager Wi-Fi state as network settings card",
+    "python_tests": 87,
+    "actual_c4_recovery_verified": false
   }
 }

@@ -6,7 +6,7 @@ from openpilot.selfdrive.ui.mici.widgets.dialog import BigInputDialog
 from openpilot.selfdrive.ui.ui_state import ui_state
 from openpilot.selfdrive.ui.lib.prime_state import PrimeType
 from openpilot.system.ui.lib.application import gui_app
-from openpilot.system.ui.lib.wifi_manager import WifiManager, Network, MeteredType
+from openpilot.system.ui.lib.wifi_manager import WifiManager, Network, MeteredType, ConnectStatus
 
 
 class NetworkLayoutMici(NavScroller):
@@ -87,6 +87,13 @@ class NetworkLayoutMici(NavScroller):
       self._cellular_metered_btn,
       # */
     ])
+
+  @property
+  def connected_wifi_ipv4(self) -> str | None:
+    """Read the same live NetworkManager state shown on the network card."""
+    if self._wifi_manager.wifi_state.status != ConnectStatus.CONNECTED:
+      return None
+    return self._wifi_manager.ipv4_address or None
 
   def _update_state(self):
     super()._update_state()

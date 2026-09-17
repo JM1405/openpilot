@@ -24,6 +24,7 @@ class SettingsLayout(NavScroller):
     toggles_btn.set_click_callback(lambda: gui_app.push_widget(toggles_panel))
 
     network_panel = NetworkLayoutMici()
+    self._network_panel = network_panel
     network_btn = SettingsBigButton("network", "", gui_app.texture("icons_mici/settings/network/wifi_strength_full.png", 76, 56))
     network_btn.set_click_callback(lambda: gui_app.push_widget(network_panel))
 

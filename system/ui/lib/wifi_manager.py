@@ -216,6 +216,12 @@ class WifiManager:
         self._add_tethering_connection()
 
       self._init_wifi_state()
+      # Populate the current IP even when settings has disabled Wi-Fi scanning.
+      # Local phone pairing reads this same cache before the network page opens.
+      try:
+        self._update_active_connection_info()
+      except Exception:
+        cloudlog.exception("Failed to read initial Wi-Fi connection info")
 
       self._tethering_password = self._get_tethering_password()
       cloudlog.debug("WifiManager initialized")

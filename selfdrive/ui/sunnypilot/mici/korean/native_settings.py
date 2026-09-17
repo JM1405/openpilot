@@ -162,6 +162,7 @@ class PhoneSettingsRoot(DrivingSettingsRoot):
     from openpilot.selfdrive.ui.sunnypilot.mici.korean.phone_runtime import PhoneRuntime
     from openpilot.selfdrive.ui.sunnypilot.mici.korean.native_phone import KoreanPhoneButton
     self.phone_runtime = PhoneRuntime(ui_state.params,
+      address_provider=lambda: self._network_panel.connected_wifi_ipv4,
       allow_model_change=os.getenv('KOREAN_PHONE_MODEL_CHANGE', '0') == '1',
       allow_settings_change=os.getenv('KOREAN_PHONE_SETTINGS_WRITE', '0') == '1')
     self._update_phone()

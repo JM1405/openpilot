@@ -276,10 +276,24 @@ class PhoneStartupError(OSError):
     self.display = messages[stage] + '\n' + code
 
 
-def local_phone_transport(service, *, address=None, port=7443, identity_root=None):
+def local_phone_transport(service, *, address=None, port=7443, identity_root=None, address_provider=None):
   from openpilot.common.koranipilot import local_data_root
   try:
-    address = address or local_ipv4()
+    if address_provider is not None:
+      # The C4 settings page already discovers Wi-Fi through NetworkManager.
+      # Read its current address on each explicit retry, not guessed device names.
+      value = address_provider()
+      try:
+        parsed = ipaddress.IPv4Address(value if isinstance(value, str) else '')
+        local = any(parsed in ipaddress.IPv4Network(n) for n in ('10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'))
+      except ValueError:
+        local = False
+      if not local:
+        # Do not fall back to cellular, VPN, loopback or an old interface IP.
+        raise OSError(errno.EADDRNOTAVAIL, 'connected Wi-Fi has no usable LAN address')
+      address = str(parsed)
+    else:
+      address = address or local_ipv4()
   except (OSError, ValueError, ImportError) as exc:
     raise PhoneStartupError('address', exc) from exc
   # AGNOS mounts /persist as read-only squashfs. /data is app-writable and
