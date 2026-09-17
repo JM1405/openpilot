@@ -15,7 +15,7 @@ from openpilot.selfdrive.ui.sunnypilot.mici.korean.settings import SettingsError
 from openpilot.selfdrive.ui.sunnypilot.mici.korean.phone_home import HOME_MODE, VEHICLE_MODE, HOME_REASON
 
 CODE_TTL = 120
-SESSION_TTL = 1800
+SETTINGS_TTL = 1800
 MAX_ATTEMPTS = 5
 MAX_SESSIONS = 3
 MAX_REQUESTS = 64
@@ -100,7 +100,8 @@ class PhoneSettings:
       self.window = None
     if self.pending and now >= self.pending['expires']:
       self.pending = None
-    self.sessions = {key: s for key, s in self.sessions.items() if now < s['expires']}
+    # A phone stays paired for the trip. Observation freshness and permission to
+    # change settings have their own deadlines; neither is the connection TTL.
 
   def _parked(self):
     view = self.controller.view()
@@ -128,7 +129,8 @@ class PhoneSettings:
       if self.pending:
         pending = {k: self.pending[k] for k in ('id', 'name', 'state')}
       return {**self.mode_view(), 'window': window, 'pending': pending,
-              'sessions': [{'id': s['id'], 'name': s['name'], 'remaining': max(0, int(s['expires'] - self.clock()))}
+              'sessions': [{'id': s['id'], 'name': s['name'], 'remaining': None,
+                            'settings_remaining': max(0, int(s['settings_expires'] - self.clock()))}
                            for s in self.sessions.values()]}
 
   def pair(self, code, name):
@@ -185,7 +187,7 @@ class PhoneSettings:
           raise PhoneError('연결 가능한 폰 수를 초과했어', 'capacity', 409)
         replacement = secrets.token_urlsafe(32)
         self.sessions[digest(replacement)] = {'id': secrets.token_hex(8), 'name': pending['name'],
-                                             'csrf': secrets.token_urlsafe(32), 'expires': self.clock() + SESSION_TTL,
+                                             'csrf': secrets.token_urlsafe(32), 'settings_expires': self.clock() + SETTINGS_TTL,
                                              'requests': {}, 'mode': self.mode}
         self.pending = None  # old unauthenticated ticket cannot be reused
         token = replacement
@@ -193,15 +195,39 @@ class PhoneSettings:
         replacement = None
       session = self.session(token)
       return {**self.mode_view(), 'state': 'connected', 'name': session['name'], 'csrf': session['csrf'],
-              'session_id': session['id'], 'remaining': max(0, int(session['expires'] - self.clock()))}, replacement
+              'session_id': session['id'], 'remaining': None, 'lifetime': 'until_disconnect',
+              'settings_remaining': max(0, int(session['settings_expires'] - self.clock()))}, replacement
 
-  def authorize_write(self, token, csrf, *, observation=False):
+  def authorize_write(self, token, csrf, *, observation=False, settings=False):
     session = self.session(token)
     if not isinstance(csrf, str) or not hmac.compare_digest(digest(csrf), digest(session['csrf'])):
       raise PhoneError('연결을 다시 확인한 뒤 요청해', 'csrf', 403)
     if session['mode'] == HOME_MODE and not observation:
       raise PhoneError(HOME_REASON, 'receive_only', 403)
+    if settings and self.clock() >= session['settings_expires']:
+      raise PhoneError('C4에서 설정 변경을 다시 승인해', 'settings_approval_expired', 403)
     return session
+
+  def device_approve_settings(self, session_id):
+    """Explicit native C4 action only; never renew through observation traffic."""
+    with self.lock:
+      self._expire()
+      if self.closed or self.mode == HOME_MODE:
+        raise PhoneError(HOME_REASON, 'receive_only', 403)
+      self._parked()
+      session = next((s for s in self.sessions.values() if s['id'] == session_id), None)
+      if session is None:
+        raise PhoneError('이미 연결이 해제됐어', 'missing', 404)
+      session['settings_expires'] = self.clock() + SETTINGS_TTL
+
+  def _settings_view(self, token, view):
+    session = self.session(token)
+    if self.mode != HOME_MODE and self.clock() >= session['settings_expires']:
+      reason = 'C4에서 설정 변경을 다시 승인해'
+      view.update(editable=False, reason=reason)
+      for row in view.get('rows', []):
+        row.update(editable=False, blocked_reason=reason)
+    return view
 
   def disconnect(self, token):
     with self.lock:
@@ -223,22 +249,24 @@ class PhoneSettings:
       view = self.controller.view()
       if self.mode == HOME_MODE:
         view.update(reason=HOME_REASON)
-      return view
+      return self._settings_view(token, view)
 
   def overview(self, token):
     with self.lock:
       self.session(token)
-      return {**self.management.overview(), 'settings': self.view(token), 'catalog_schema': 1 if hasattr(self, 'catalog') else 0,
+      view = self.management.overview()
+      view['models'] = self._settings_view(token, view['models'])
+      return {**view, 'settings': self.view(token), 'catalog_schema': 1 if hasattr(self, 'catalog') else 0,
               'connection': self.mode_view(), 'road_input': self.road_input.view(), 'route': self.route.view()}
 
   def catalog_view(self, token):
     with self.lock:
       self.session(token)
-      return self.catalog.view()
+      return self._settings_view(token, self.catalog.view())
 
   def change(self, token, csrf, request, *, catalog=False):
     with self.lock:
-      session = self.authorize_write(token, csrf)
+      session = self.authorize_write(token, csrf, settings=True)
       controller, kind = (self.catalog, 'catalog') if catalog else (self.controller, 'setting')
       if not isinstance(request, dict) or set(request) != {'request_id', 'id', 'value', 'revision', 'acknowledged'}:
         raise PhoneError('올바른 변경 요청이 아니야')
@@ -269,14 +297,14 @@ class PhoneSettings:
       if not record or record.get('kind') != ('catalog' if catalog else 'setting'):
         raise PhoneError('이 연결에서 받은 요청을 찾지 못했어. 현재 저장값을 확인해', 'missing', 404)
       receipt = dict(record['receipt'])
-      view = self.catalog.view() if catalog else self.controller.view()
+      view = self._settings_view(token, self.catalog.view() if catalog else self.controller.view())
       row = next((r for r in view['rows'] if r['id'] == receipt['id']), None)
       return {'receipt': receipt, 'setting': row,
               'superseded': bool(row and receipt['outcome'] == 'saved' and row['saved'] != receipt['value'])}
 
   def model_change(self, token, csrf, request):
     with self.lock:
-      session = self.authorize_write(token, csrf)
+      session = self.authorize_write(token, csrf, settings=True)
       if not isinstance(request, dict) or set(request) != {'request_id', 'ref', 'revision', 'acknowledged'}:
         raise PhoneError('올바른 모델 변경 요청이 아니야')
       request_id = request['request_id']
@@ -306,6 +334,6 @@ class PhoneSettings:
       if not record or record.get('kind') != 'model':
         raise PhoneError('이 연결에서 받은 모델 요청을 찾지 못했어. 현재 모델을 확인해', 'missing', 404)
       receipt = dict(record['receipt'])
-      models = self.management.models()
+      models = self._settings_view(token, self.management.models())
       applied = receipt.get('outcome') == 'requested' and models['current']['ref'] == receipt.get('ref') and not models['requested']
       return {'receipt': receipt, 'models': models, 'applied': applied}

@@ -7,7 +7,7 @@ from unittest.mock import patch  # noqa: TID251
 
 from openpilot.selfdrive.ui.sunnypilot.mici.korean.phone_home import HOME_MODE
 from openpilot.selfdrive.ui.sunnypilot.mici.korean.phone_runtime import PhoneRuntime
-from openpilot.selfdrive.ui.sunnypilot.mici.korean.phone_settings import PhoneError, SESSION_TTL, CODE_TTL
+from openpilot.selfdrive.ui.sunnypilot.mici.korean.phone_settings import PhoneError, SETTINGS_TTL, CODE_TTL
 from openpilot.selfdrive.ui.sunnypilot.mici.korean.phone_transport import PhoneTransport, ensure_tls_identity
 from openpilot.selfdrive.ui.sunnypilot.mici.korean.settings import SettingsError
 from openpilot.selfdrive.ui.sunnypilot.mici.korean.tests.test_phone_management import Store, SM, Message
@@ -302,7 +302,7 @@ class PhoneHomeTest(unittest.TestCase):
     with self.assertRaises(PhoneError):
       self.service.kakao.challenge(token)
 
-  def test_code_and_session_expiry_with_continuous_device_telemetry(self):
+  def test_code_expires_but_connection_survives_settings_deadline(self):
     self.service.device_set_home(True)
     code = self.service.device_open()['window']['code']
     for _ in range(CODE_TTL):
@@ -311,11 +311,11 @@ class PhoneHomeTest(unittest.TestCase):
     with self.assertRaises(PhoneError):
       self.service.pair(code, 'Expired')
     token, _ = self.connect()
-    for _ in range(SESSION_TTL):
+    for _ in range(SETTINGS_TTL + 1):
       self.now += 1
       self.runtime.update(HomeSM(self.now), 10, True)
-    with self.assertRaises(PhoneError):
-      self.service.session(token)
+    self.assertEqual(self.service.status(token)[0]['state'], 'connected')
+    self.assertEqual(self.service.status(token)[0]['settings_remaining'], 0)
 
 
 class HomeHttpsTest(unittest.TestCase):

@@ -59,6 +59,10 @@ class KoreanPhonePage(Widget):
       text('내 폰이 맞으면 승인해줘', 16, 117, 24)
       self.action('deny', '거절', (16, 170, 244, 58))
       self.action('approve', '승인', (276, 170, 244, 58), True)
+    elif self.connections and self.message:
+      text('설정 승인', 166, 17, 28)
+      lines(self.message, 78)
+      self.action('clear', '확인', (16, 170, 504, 58), True)
     elif self.connections:
       text('연결된 폰', 146, 17, 28)
       sessions = state['sessions']
@@ -70,6 +74,8 @@ class KoreanPhonePage(Widget):
           self.action('next', f'{self.selected+1}/{len(sessions)} 다음', (354, 8, 166, 48))
         text(item['name'][:12], 16, 85, 28)
         self.action('revoke', '연결 해제', (352, 76, 168, 58))
+        if state['mode'] != HOME_MODE:
+          self.action('settings_approval', '설정 변경 승인', (16, 116, 260, 48))
       else:
         text('폰에서 연결 확인 중' if pending and pending['state'] == 'approved' else '연결된 폰이 없어', 16, 88, 28)
       self.action('route', '폰 경로', (16, 170, 244, 58))
@@ -138,6 +144,9 @@ class KoreanPhonePage(Widget):
         self.connections = action == 'approve'
       elif action == 'revoke' and self.displayed_sessions:
         service.device_revoke(self.displayed_sessions[0])
+      elif action == 'settings_approval' and self.displayed_sessions:
+        service.device_approve_settings(self.displayed_sessions[0])
+        self.message = '설정 변경 승인 완료'
       elif action == 'open':
         with service.lock:
           # Never replace a request that arrived after the frame was rendered.

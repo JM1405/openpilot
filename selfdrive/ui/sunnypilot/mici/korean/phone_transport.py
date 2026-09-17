@@ -12,7 +12,7 @@ from http.cookies import CookieError, SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from openpilot.selfdrive.ui.sunnypilot.mici.korean.phone_settings import PhoneError, SESSION_TTL, digest
+from openpilot.selfdrive.ui.sunnypilot.mici.korean.phone_settings import PhoneError, digest
 from openpilot.selfdrive.ui.sunnypilot.mici.korean.settings import SettingsError
 
 COOKIE = '__Secure-korean_phone'
@@ -43,8 +43,8 @@ class PhoneHandler(BaseHTTPRequestHandler):
                        'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'"}.items():
       self.send_header(key, value)
     if cookie is not None:
-      age = SESSION_TTL if cookie else 0
-      self.send_header('Set-Cookie', f'{COOKIE}={cookie}; Path=/api/phone/; Secure; HttpOnly; SameSite=Strict; Max-Age={age}')
+      expiry = '' if cookie else '; Max-Age=0'
+      self.send_header('Set-Cookie', f'{COOKIE}={cookie}; Path=/api/phone/; Secure; HttpOnly; SameSite=Strict{expiry}')
     self.end_headers()
     try:
       self.wfile.write(body)
@@ -92,7 +92,7 @@ class PhoneHandler(BaseHTTPRequestHandler):
             return response(service.management.device())
           if self.path == '/api/phone/models':
             service.session(token)
-            return response(service.management.models())
+            return response(service._settings_view(token, service.management.models()))
           if self.path == '/api/phone/navigation':
             service.session(token)
             return response(service.navigation.view())

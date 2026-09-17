@@ -8,7 +8,7 @@ from openpilot.selfdrive.ui.sunnypilot.mici.korean.phone_pairing import pairing_
 from openpilot.selfdrive.ui.sunnypilot.mici.korean.phone_runtime import PhoneRuntime
 from openpilot.selfdrive.ui.sunnypilot.mici.korean.phone_settings import PhoneError
 from openpilot.selfdrive.ui.sunnypilot.mici.korean.tests.test_phone_home import HomeSM
-from openpilot.selfdrive.ui.sunnypilot.mici.korean.tests.test_phone_management import Store
+from openpilot.selfdrive.ui.sunnypilot.mici.korean.tests.test_phone_management import Store, SM
 
 
 def native_module():
@@ -120,3 +120,23 @@ class PairingUiTest(unittest.TestCase):
     self.assertTrue(all(304<=x<x+w<=520 and 12<=y<y+h<=228 and h>=3 for x,y,w,h in tiles))
     for url in ('http://10.0.0.1','https://8.8.8.8','https://127.0.0.1','https://10.0.0.1/path','https://user@10.0.0.1','https://10.0.0.1?x=1'):
       with self.subTest(url=url),self.assertRaises(ValueError):pairing_payload(url,'ab'*32,'123456')
+
+  def test_settings_reapproval_is_native_vehicle_only_and_preserves_connection(self):
+    service = self.runtime.service
+    for home in (True, False):
+      if not home:
+        service.device_set_home(False)
+        self.runtime.update(SM(self.now), 10, True)
+      ticket = service.pair(service.device_open()['window']['code'], 'phone')
+      service.device_decide(service.pending['id'], True)
+      state, token = service.status(ticket)
+      self.page.connections = True
+      self.render()
+      self.assertEqual('settings_approval' in dict(self.page.actions), not home)
+      if not home:
+        service.session(token)['settings_expires'] = self.now
+        self.tap('settings_approval')
+        self.assertGreater(service.status(token)[0]['settings_remaining'], 0)
+        self.assertEqual(service.status(token)[0]['session_id'], state['session_id'])
+      service.disconnect(token)
+    self.assertEqual(self.store.writes, [])
