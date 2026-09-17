@@ -95,9 +95,18 @@ class UIState(UIStateSP):
     self._params_thread: threading.Thread | None = None
 
     # Callbacks
+    self._update_callbacks: list[Callable[[], None]] = []
     self._offroad_transition_callbacks: list[Callable[[], None]] = []
     self._engaged_transition_callbacks: list[Callable[[], None]] = []
     self._on_body_changed_callbacks: list[Callable[[], None]] = []
+
+  def add_update_callback(self, callback: Callable[[], None]):
+    if callback not in self._update_callbacks:
+      self._update_callbacks.append(callback)
+
+  def remove_update_callback(self, callback: Callable[[], None]):
+    if callback in self._update_callbacks:
+      self._update_callbacks.remove(callback)
 
   def add_offroad_transition_callback(self, callback: Callable[[], None]):
     self._offroad_transition_callbacks.append(callback)
@@ -129,6 +138,10 @@ class UIState(UIStateSP):
     self._update_status()
     device.update()
     UIStateSP.update(self)
+    # Unlike render/nav ticks, this runs while the display is asleep too.
+    # Consumers copy the just-received messages on the same UI thread.
+    for callback in tuple(self._update_callbacks):
+      callback()
 
   def _params_refresh_worker(self):
     drop_realtime()

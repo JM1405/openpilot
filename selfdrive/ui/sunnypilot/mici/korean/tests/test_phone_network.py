@@ -105,7 +105,8 @@ class NetworkAddressTest(unittest.TestCase):
         items = []
         self._scroller = types.SimpleNamespace(_items=items, add_widget=items.append)
     store = Store()
-    ui = types.SimpleNamespace(params=store, sm=HomeSM(time.monotonic()), started_frame=10, is_release=True, is_sp_release=True)
+    ui = types.SimpleNamespace(params=store, sm=HomeSM(time.monotonic()), started_frame=10, is_release=True, is_sp_release=True,
+                               add_update_callback=lambda _: None, remove_update_callback=lambda _: None)
     gui = types.SimpleNamespace(add_nav_stack_tick=lambda _: None, remove_nav_stack_tick=lambda _: None)
     path = ROOT / 'selfdrive/ui/sunnypilot/mici/korean/native_settings.py'
     cls = next(n for n in ast.parse(path.read_text()).body if isinstance(n, ast.ClassDef) and n.name == 'PhoneSettingsRoot')

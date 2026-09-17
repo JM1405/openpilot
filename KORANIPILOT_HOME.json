@@ -149,5 +149,20 @@
     "address_source": "same connected NetworkManager Wi-Fi state as network settings card",
     "python_tests": 87,
     "actual_c4_recovery_verified": false
+  },
+  "phone_state_lifecycle_revision": {
+    "base_commit": "a17f26caefa7663cee73a18bea45f1e8a8d913c9",
+    "files": {
+      "selfdrive/ui/ui_state.py": "9ccd2b85f6a08dedb6e0f59d049ab7ea85aeb95ef312f91971bdf2405b314677",
+      "selfdrive/ui/sunnypilot/mici/korean/native_settings.py": "a88bf66ed7173c3cd8ca217a4b7cabb33e636a162271a5d07cb7b1aa28e8925a",
+      "selfdrive/ui/sunnypilot/mici/korean/tests/test_phone_network.py": "e72f4d2cb04db528b2108fc82ec47c6cf8110fee0352920bb487f266713eab14",
+      "selfdrive/ui/sunnypilot/mici/korean/tests/test_phone_lifecycle.py": "819ebeb9d6bec670d11ae9c8f2b9327e9765b74878089d5646025554b22cbb9d"
+    },
+    "update_source": "UIState post-update callback on UI thread, including display sleep",
+    "state_ttl_seconds": 1.5,
+    "python_tests": 93,
+    "actual_c4_disconnect_cause_verified": false,
+    "actual_c4_recovery_verified": false,
+    "android_apk_changed": false
   }
 }

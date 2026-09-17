@@ -3,12 +3,12 @@
 > **EXPERIMENTAL B1 HOME RECEPTION — NOT A DRIVING RELEASE**
 >
 > C4 집 테스트용이야. 폰 연결 메뉴/HTTPS가 켜지며 집 수신은 C4에서 직접 켜야 해.
-> 폰 설정·모델 변경과 도로 입력은 꺼져 있어. 실제 C4 부팅/무선 수신은 미검증이야.
-> Home test only. Phone reception is opt-in on device. No device or road validation yet.
+> 폰 설정·모델 변경과 도로 입력은 꺼져 있어. 설치·최초 연결은 사용자 보고이며 안정적 수신·차량 동작은 미검증이야.
+> Home test only. Initial connection is user-reported; sustained reception and vehicle operation remain unverified.
 
 [QR phone pairing, startup repair, usage guide and restoration](KORANIPILOT_HOME.md). Requires Android manager v0.12-qr-pairing for scanning.
 
-This revision fixes read-only TLS identity storage and identifies the home profile as Koranipilot. Explicit local usage acknowledgement is required; original licenses remain accessible.
+This revision keeps phone telemetry updates running when the C4 display sleeps. The original 1.5-second freshness gate and receive-only restrictions remain enforced. Local regression tests pass; physical C4 recovery still needs verification.
 
 ![](https://user-images.githubusercontent.com/47793918/233812617-beab2e71-57b9-479e-8bff-c3931347ca40.png)
 

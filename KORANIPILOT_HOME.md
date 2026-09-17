@@ -1,8 +1,8 @@
 # Koranipilot B1 home reception candidate
 
 This branch is a **comma four home test**, not a driving release.
-The user reports installation and native UI entry. Actual QR pairing and
-wireless phone reception have not yet been validated.
+The user reports installation and an initial phone connection, followed by
+a device/ignition-state expiry. Sustained wireless reception is not validated.
 
 ## Installation
 
@@ -40,7 +40,7 @@ The existing storage keys use the separate `koranipilot-home-1` marker, not an
 upstream terms version. Hardware startup checks this same explicit marker;
 existing training, driver checks and other start conditions remain required.
 This changes the notice gate only, not driving planners, vehicle control or CAN.
-87 Python tests pass, including local TLS and source/widget-double flow tests.
+93 Python tests pass, including local TLS and source/widget-double flow tests.
 Actual C4 storage, screen rendering and wireless recovery remain unverified.
 
 ## Wi-Fi address discovery repair
@@ -53,7 +53,28 @@ link-local or loopback address never falls back to another interface or opens
 a listener. Existing TLS pinning and on-device approval remain required.
 The previous `Wi-Fi 주소를 확인해줘 / OSError` is the address-discovery stage;
 it does not prove a phone-hotspot restriction or a certificate-write failure.
-Actual C4 wireless recovery still requires testing after this update.
+The user reported an initial connection after that repair, followed by state
+expiry. Exact installed versions and actual data reception remain unverified.
+
+## Display sleep and phone state updates
+
+The phone runtime previously copied telemetry from a navigation/render tick.
+The UI skips those ticks while the display is off, even though its SubMaster
+continues receiving device and panda messages. A local reproduction shows
+fresh upstream messages but an expired phone snapshot and revoked session.
+
+Phone snapshots now update immediately after UIState refreshes the messages,
+including while the screen is off, and unregister when the owner closes.
+Original receive timestamps, 1.5-second expiry, valid/frame checks, ignition
+OFF, noOutput and receive-only restrictions are unchanged. A stopped publisher
+or stalled entire UI still revokes approval; fresh data cannot restore it.
+No publisher, safety mode, vehicle control or Android source is changed.
+
+Six lifecycle regression tests use the production Python scheduling code with
+virtual time and synthetic publisher/hardware/renderer doubles. They do not
+establish the cause of the user's disconnect; screen sleep was not recalled.
+After updating C4, enable home reception and pair/approve again, then check
+the connection after the display sleeps for at least 30 seconds and wakes.
 
 ## Scope
 

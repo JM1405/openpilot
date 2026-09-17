@@ -166,7 +166,7 @@ class PhoneSettingsRoot(DrivingSettingsRoot):
       allow_model_change=os.getenv('KOREAN_PHONE_MODEL_CHANGE', '0') == '1',
       allow_settings_change=os.getenv('KOREAN_PHONE_SETTINGS_WRITE', '0') == '1')
     self._update_phone()
-    gui_app.add_nav_stack_tick(self._update_phone)
+    ui_state.add_update_callback(self._update_phone)
     atexit.register(self.close_phone)
     # No listener without explicit deployment configuration. The legacy PC
     # preview keeps its own loopback server and synthetic settings unchanged.
@@ -195,7 +195,7 @@ class PhoneSettingsRoot(DrivingSettingsRoot):
     self.phone_runtime.update(ui_state.sm, ui_state.started_frame, ui_state.is_release or ui_state.is_sp_release)
 
   def close_phone(self):
-    gui_app.remove_nav_stack_tick(self._update_phone)
+    ui_state.remove_update_callback(self._update_phone)
     self.phone_runtime.close()
 
 
