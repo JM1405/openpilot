@@ -85,6 +85,11 @@ class ModelState(ModelStateBase):
       model_bundle = None
     else:
       model_bundle = get_active_bundle()
+    from openpilot.sunnypilot.models.selection import bundle_signature
+    self.model_signature = bundle_signature(model_bundle) if model_bundle is not None else ""
+    self.model_identity_known = model_bundle is not None and bool(model_bundle.ref)
+    self.model_ref = model_bundle.ref if model_bundle is not None else ""
+    self.model_name = model_bundle.displayName if model_bundle is not None else "외부 모델 확인 불가"
     self.generation = model_bundle.generation if model_bundle is not None else None
     overrides = {override.key: override.value for override in model_bundle.overrides} if model_bundle else {}
 
@@ -439,6 +444,7 @@ def main(demo=False):
       pm.send('modelV2', modelv2_send)
       pm.send('drivingModelData', drivingdata_send)
       pm.send('cameraOdometry', posenet_send)
+      model.report_model_identity(mdv2sp_send)
       pm.send('modelDataV2SP', mdv2sp_send)
     last_vipc_frame_id = meta_main.frame_id
 

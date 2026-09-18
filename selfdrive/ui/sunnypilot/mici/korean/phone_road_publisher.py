@@ -27,15 +27,16 @@ class PhoneRoadPublisher:
         with self.service.lock:
           sample = self.service.road_input.sample()
           owner = self.service.road_input.receiver.owner
-          route = self.service.route.hint(owner, sample.fix)
-        self.publisher.publish(sample, route)
+          route = self.service.route.hint(owner, sample.anchor or sample.fix)
+          sdk_events = self.service.kakao.road_events(owner)
+        self.publisher.publish(sample, route, sdk_events)
         self.stop.wait(0.05)
     finally:
       try:
         sample = self.service.road_input.sample()
         self.publisher.publish(
           replace(
-            sample, revision=sample.revision + 1, generation=sample.generation + 1, status="phoneServiceStopped", fix=None, valid_until_ns=0, uncertainty_ns=0
+            sample, revision=sample.revision + 1, generation=sample.generation + 1, status="phoneServiceStopped", fix=None, valid_until_ns=0, uncertainty_ns=0, anchor=None, anchor_until_ns=0, anchor_accepted_ns=0, anchor_uncertainty_ns=0
           )
         )
       finally:

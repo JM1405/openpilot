@@ -48,12 +48,13 @@ def limit_accel_in_turns(v_ego, angle_steers, a_target, CP):
 
 
 class LongitudinalPlanner(LongitudinalPlannerSP):
-  def __init__(self, CP, CP_SP, init_v=0.0, init_a=0.0, dt=DT_MDL):
+  def __init__(self, CP, CP_SP, init_v=0.0, init_a=0.0, dt=DT_MDL, *, road_observer=None):
     self.CP = CP
     self.mpc = LongitudinalMpc(dt=dt)
     LongitudinalPlannerSP.__init__(self, self.CP, CP_SP, self.mpc)
     self.fcw = False
     self.dt = dt
+    self.road_observer = road_observer
     self.allow_throttle = True
 
     self.a_desired = init_a
@@ -95,9 +96,13 @@ class LongitudinalPlanner(LongitudinalPlannerSP):
       accel_coast = ACCEL_MAX
 
     v_ego = sm['carState'].vEgo
-    v_cruise_kph = min(sm['carState'].vCruise, V_CRUISE_MAX)
-    v_cruise = v_cruise_kph * CV.KPH_TO_MS
     v_cruise_initialized = sm['carState'].vCruise != V_CRUISE_UNSET
+    v_cruise_kph = min(sm['carState'].vCruise, V_CRUISE_MAX)
+    # UNSET is a sentinel, not a request for V_CRUISE_MAX. Keep the idle MPC
+    # reference at measured speed until SET/PCM supplies a real setpoint. This
+    # does not initialize cruise or permit road control; radar/forceDecel and
+    # the existing engagement/reset gates still apply.
+    v_cruise = v_cruise_kph * CV.KPH_TO_MS if v_cruise_initialized else max(0.0, v_ego)
 
     long_control_off = sm['controlsState'].longControlState == LongCtrlState.off
     force_slow_decel = sm['controlsState'].forceDecel
@@ -173,6 +178,12 @@ class LongitudinalPlanner(LongitudinalPlannerSP):
       accel_clip[idx] = np.clip(accel_clip[idx], self.prev_accel_clip[idx] - 0.05, self.prev_accel_clip[idx] + 0.05)
     self.output_a_target = np.clip(output_a_target, accel_clip[0], accel_clip[1])
     self.prev_accel_clip = accel_clip
+
+    # Observe after the stock output is finalized. Never feed the candidate into
+    # MPC, SCC, speed limits, source selection, aTarget or shouldStop in B1.
+    if self.road_observer is not None:
+      self.road_observer.update(sm, self.CP, self.dt, float(self.output_a_target),
+        next((name for name, value in LongitudinalPlanSource.schema.enumerants.items() if value == self.mpc.source), 'unknown'), not reset_state)
 
   def publish(self, sm, pm):
     plan_send = messaging.new_message('longitudinalPlan')

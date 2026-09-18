@@ -4,6 +4,7 @@ This boundary deliberately does not write MapTargetVelocities or carControl.
 An advisory code without a same-route distance/target must not become braking.
 """
 import copy
+import json
 import math
 import secrets
 import time
@@ -30,13 +31,18 @@ class PhoneKakao:
       # One outstanding request per paired session, with a C4-side deadline.
       session['kakao_challenge'] = (secrets.token_hex(16), self.clock())
       return {'challenge': session['kakao_challenge'][0], 'ttl_ms': int(TTL * 1000),
-              'status': self.view(), 'control_enabled': False}
+              'status': self.view(), 'control_enabled': False, 'event_geometry_version': 1,
+              'driving_input_allowed': self.driving_input_allowed()}
 
   def accept(self, token, csrf, data):
     with self.service.lock:
       session = self.service.authorize_write(token, csrf, observation=True)
       allowed = {'challenge', 'seq', 'mode', 'active', 'location_age_ms', 'gps_valid',
                  'speed_kph', 'route_matched', 'safety_age_ms', 'events'}
+      extended=isinstance(data,dict) and data.get('event_geometry_version')==1
+      if extended:allowed |= {'event_geometry_version','sdk_simulation'}
+      if extended and (type(data['event_geometry_version']) is not int or type(data.get('sdk_simulation')) is not bool):
+        raise PhoneError('SDK 입력 버전을 확인해')
       if not isinstance(data, dict) or set(data) != allowed:
         raise PhoneError('카카오 자료 형식을 확인해')
       challenge, issued = session.get('kakao_challenge', ('', -math.inf))
@@ -64,6 +70,7 @@ class PhoneKakao:
       ids = set()
       for event in events:
         fields = {'id', 'code', 'kind', 'distance_m', 'distance_basis', 'limit_kph', 'passed', 'variable'}
+        if extended:fields.add('geometry')
         if not isinstance(event, dict) or set(event) != fields:
           raise PhoneError('안전 안내 항목을 확인해')
         if (not isinstance(event['id'], str) or not 1 <= len(event['id']) <= 80 or event['id'] in ids or
@@ -82,6 +89,9 @@ class PhoneKakao:
         if event['limit_kph'] is not None:
           if event['kind'] not in ('camera', 'section') or not number(event['limit_kph'], 1, 160):
             raise PhoneError('급커브/방지턱에 임의 속도를 넣을 수 없어')
+        if extended and event['geometry'] is not None:
+          from openpilot.sunnypilot.selfdrive.controls.lib.road_constraints.sdk_events import geometry
+          if not geometry(event['geometry']):raise PhoneError('안내 좌표/방향을 확인해')
         clean.append(copy.deepcopy(event))
       now = self.clock()
       session['kakao_seq'] = seq
@@ -111,6 +121,8 @@ class PhoneKakao:
           reason = '이미 통과'
         elif not valid:
           reason = '위치 입력 대기/만료'
+        elif event.get('geometry') is not None and event['kind'] == 'camera':
+          reason = '카메라 좌표·방향 수신 · C4 도로 대조 필요'
         elif event['distance_basis'] != 'same_route':
           reason = '진행 도로와 남은 거리 미확인'
         elif event['kind'] == 'sharp_turn':
@@ -131,3 +143,25 @@ class PhoneKakao:
               'speed_kph': item['speed_kph'] if valid else None, 'events': rows,
               'reason': ('카카오 수신 중지' if not item['active'] else
                          '카카오 자료 수신 · 제어 연결 전' if valid else 'SDK 연결됨 · 새 위치 대기')}
+
+  def driving_input_allowed(self):
+    from openpilot.sunnypilot.selfdrive.controls.lib.road_constraints.runtime import enabled
+    return enabled() and self.service.mode != 'home_receive'
+
+  def road_events(self, owner):
+    from openpilot.sunnypilot.selfdrive.controls.lib.road_constraints.sdk_events import CODES,MAX_AGE,parse
+    with self.service.lock:
+      self.service._expire()
+      item=self.latest;now=self.clock()
+      if (not self.driving_input_allowed() or not item or not item['active'] or item.get('event_geometry_version')!=1
+          or item.get('sdk_simulation') or owner!=item['session_id']
+          or owner not in {s['id'] for s in self.service.sessions.values()} or not item['received']<=now<item['expires']):return ''
+      age=item['safety_age_ms']
+      if age is None:return ''
+      source=item['received']-(age+item['transit_bound_ms'])/1000.
+      expires=min(item['expires'],source+MAX_AGE)
+      events=[{'id':e['id'],'code':e['code'],'limit_kph':e['limit_kph'],'geometry':e['geometry']} for e in item['events']
+              if e['kind']=='camera' and e['code'] in CODES and not e['passed'] and not e['variable']
+              and e['limit_kph'] is not None and e['limit_kph']<=130 and e.get('geometry') is not None]
+      raw=json.dumps(dict(version=1,session=owner,sequence=item['seq'],source_at=source,expires=expires,events=events),separators=(',',':'))
+      return raw if parse(raw,now) is not None else ''

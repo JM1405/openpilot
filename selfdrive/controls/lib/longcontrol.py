@@ -15,7 +15,7 @@ def long_control_state_trans(CP, CP_SP, active, long_control_state, v_ego,
   # Gas Interceptor
   cruise_standstill = cruise_standstill and not CP_SP.enableGasInterceptor
 
-  stopping_condition = should_stop
+  stopping_condition = should_stop or brake_pressed
   starting_condition = (not should_stop and
                         not cruise_standstill and
                         not brake_pressed)
@@ -66,7 +66,7 @@ class LongControl:
     self.pid.pos_limit = accel_limits[1]
 
     self.long_control_state = long_control_state_trans(self.CP, self.CP_SP, active, self.long_control_state, CS.vEgo,
-                                                       should_stop, CS.brakePressed,
+                                                       should_stop, CS.brakePressed or CS.regenBraking or CS.brakeHoldActive,
                                                        CS.cruiseState.standstill)
     if self.long_control_state == LongCtrlState.off:
       self.reset()

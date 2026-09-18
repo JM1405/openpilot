@@ -8,7 +8,7 @@ All methods run under the owner's service lock. This module starts no services.
 """
 
 import secrets
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from uuid import UUID
 
@@ -20,6 +20,7 @@ MAX_RTT_NS = 100_000_000
 SYNC_TTL_NS = 5 * NS
 PROBE_TTL_NS = 500_000_000
 FIX_AGE_NS = 200_000_000
+ANCHOR_AGE_NS = 1_250_000_000
 DRIFT_PPM = 200  # Development assumption, not a measured phone/C4 oscillator bound.
 
 
@@ -51,6 +52,10 @@ class LiveSample:
   fix: Fix | None = None
   valid_until_ns: int = 0
   uncertainty_ns: int = 0
+  anchor: Fix | None = None
+  anchor_until_ns: int = 0
+  anchor_accepted_ns: int = 0
+  anchor_uncertainty_ns: int = 0
 
 
 class LiveReceiver:
@@ -87,7 +92,10 @@ class LiveReceiver:
     if seq <= self.sync_sequence or sent < self.last_sent:
       raise LiveError("syncReplay")
     self.owner, self.stream, self.sync_sequence = owner, stream, seq
-    self.clear("synchronizing", unsync=True)
+    if self.mapping is None or now-self.mapping[3] >= SYNC_TTL_NS:
+      self.clear("synchronizing", unsync=True)
+    # Same-owner renewal keeps the previous clock and its absolute deadlines
+    # until a compatible new clock interval is committed. Nothing is renewed.
     challenge = secrets.token_hex(24)
     self.pending = (challenge, sent, now)
     return {"sync_id": challenge, "receiver_reply_ns": now, "sync_sequence": seq}
@@ -102,8 +110,13 @@ class LiveReceiver:
     if not 0 <= now - replied <= PROBE_TTL_NS or not 0 <= received - sent <= MAX_RTT_NS:
       self.clear("uncertainClock", unsync=True)
       raise LiveError("uncertainClock")
-    self.mapping = (challenge, replied - received, replied - sent, replied, received)
-    self.clear("waitingForFix")
+    old = self.mapping
+    mapping = (challenge, replied - received, replied - sent, replied, received)
+    drift = 1_000_000 + (max(0, now-old[3])*DRIFT_PPM//1_000_000) if old else 0
+    compatible = old is not None and now-old[3] < SYNC_TTL_NS and max(old[1]-drift, mapping[1]) <= min(old[2]+drift, mapping[2])
+    self.mapping = mapping
+    if not compatible:
+      self.clear("waitingForFix" if old is None else "clockMappingChanged")
     return {
       "status": "synchronized",
       "sync_id": challenge,
@@ -114,8 +127,7 @@ class LiveReceiver:
 
   def accept(self, data, now):
     self.check_clock(now)
-    if self.latest.fix and now > self.latest.valid_until_ns:
-      self.clear("inputExpired")
+    self.expire_samples(now)
     mapping = self.mapping
     if not mapping or data.get("sync_id") != mapping[0] or now - mapping[3] > SYNC_TTL_NS:
       self.clear("syncRequired", unsync=True)
@@ -148,15 +160,25 @@ class LiveReceiver:
       self.clear("sequenceGap")
     self.revision += 1
     deadline = min(low + FIX_AGE_NS, mapping[3] + SYNC_TTL_NS)
-    self.latest = LiveSample(self.revision, self.generation, "liveFix", Fix(*values, (low + high) / (2 * NS)), deadline, (high - low + 1) // 2)
+    fix = Fix(*values, (low + high) / (2 * NS))
+    uncertainty = (high - low + 1) // 2
+    self.latest = LiveSample(self.revision, self.generation, "liveFix", fix, deadline, uncertainty,
+      fix, min(low+ANCHOR_AGE_NS, mapping[3]+SYNC_TTL_NS), now, uncertainty)
     return {"status": "liveFix", "sequence": seq, "age_upper_ms": (now - low) / 1e6, "uncertainty_ms": self.latest.uncertainty_ns / 1e6}
+
+  def expire_samples(self, now):
+    if self.latest.anchor is not None and now >= self.latest.anchor_until_ns:
+      self.clear("inputExpired")
+    elif self.latest.fix is not None and now >= self.latest.valid_until_ns:
+      self.revision += 1
+      self.latest = replace(self.latest, revision=self.revision, status="awaitingNextFix", fix=None, valid_until_ns=0, uncertainty_ns=0)
 
   def sample(self, now):
     self.check_clock(now)
     if self.mapping and now - self.mapping[3] > SYNC_TTL_NS:
       self.clear("syncExpired", unsync=True)
-    elif self.latest.fix and now > self.latest.valid_until_ns:
-      self.clear("inputExpired")
+    else:
+      self.expire_samples(now)
     return self.latest
 
 
@@ -172,6 +194,7 @@ class LiveRoadAdapter:
     self.route, self.route_identity = route, None
     self.revision = self.generation = -1
     self.observation = Observation("disconnected")
+    self.route_blocked = False
 
   def __call__(self, now):
     item = self.sample()
@@ -179,14 +202,12 @@ class LiveRoadAdapter:
     identity = (hint.state, hint.identity) if hint is not None else ('none', '')
     changed = self.route_identity is not None and self.route_identity != identity
     self.route_identity = identity
-    if hint is not None and (hint.state == 'pending' or (hint.state == 'active' and now >= hint.valid_until)):
-      self.observation = self.provider.reset(hint.reason or 'routeExpired')
-      self.revision = item.revision
-      return None
+    blocked = hint is not None and (hint.state == 'pending' or (hint.state == 'active' and now >= hint.valid_until))
+    availability_changed = self.route_blocked != blocked
+    self.route_blocked = blocked
     if changed:
-      self.observation = self.provider.reset('routeChanged')
-      self.revision = item.revision
-      return None  # Require a new raw fix; never reconfirm using an old sample.
+      self.provider.set_route(hint)
+      self.observation = Observation('routeChanged')
     if item.revision != self.revision:
       if item.generation != self.generation:
         self.provider.reset(item.status)
@@ -199,6 +220,9 @@ class LiveRoadAdapter:
         except Exception:
           self.observation = self.provider.reset("providerError")
           raise
+    elif (changed or availability_changed) and item.fix is not None and now * NS < item.valid_until_ns:
+      # Rebuild against this route; retain the existing GPS timestamp/deadline.
+      self.observation = self.provider.revalidate_route(now=now, today=self.today(), route=hint)
     if item.fix is None or now * NS > item.valid_until_ns:
       return None
     return self.observation.road_input

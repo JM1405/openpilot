@@ -38,6 +38,47 @@ def network_panel(manager):
 
 
 class NetworkAddressTest(unittest.TestCase):
+  def test_boot_address_retry_is_bounded_and_never_pairs_or_writes(self):
+    now = [100.]
+    store = Store()
+    runtime = PhoneRuntime(store, clock=lambda: now[0])
+    self.addCleanup(runtime.close)
+    failure = transport.PhoneStartupError('address', OSError(errno.EADDRNOTAVAIL, 'not ready'))
+    server = types.SimpleNamespace(close=lambda: None)
+    with patch.dict(os.environ, KOREAN_PHONE_LOCAL='1'), patch.object(transport, 'local_phone_transport', side_effect=failure) as start:
+      self.assertFalse(runtime.retry_local_transport())
+      runtime.update(HomeSM(now[0]))
+      self.assertEqual(start.call_count, 1)
+      now[0] += 2
+      runtime.update(HomeSM(now[0]))
+      self.assertEqual(start.call_count, 2)
+      now[0] += 2
+      start.side_effect = None
+      start.return_value = server
+      runtime.update(HomeSM(now[0]))
+      self.assertIs(runtime.transport, server)
+      now[0] += 2
+      runtime.update(HomeSM(now[0]))
+      self.assertEqual(start.call_count, 3)
+    self.assertEqual(store.writes, [])
+    self.assertEqual(runtime.service.sessions, {})
+    self.assertIsNone(runtime.service.window)
+    self.assertFalse(runtime.service.home_active)
+
+  def test_boot_retry_stops_at_deadline_and_after_close(self):
+    for close in (False, True):
+      with self.subTest(closed=close):
+        now = [100.]
+        runtime = PhoneRuntime(Store(), clock=lambda: now[0])
+        self.addCleanup(runtime.close)
+        failure = transport.PhoneStartupError('address', OSError(errno.EADDRNOTAVAIL, 'not ready'))
+        with patch.dict(os.environ, KOREAN_PHONE_LOCAL='1'), patch.object(transport, 'local_phone_transport', side_effect=failure) as start:
+          self.assertFalse(runtime.retry_local_transport())
+          if close: runtime.close()
+          now[0] = 102. if close else 160.
+          runtime.update(HomeSM(now[0]))
+          self.assertEqual(start.call_count, 1)
+
   def test_network_card_and_pairing_share_only_connected_address(self):
     manager = types.SimpleNamespace(wifi_state=types.SimpleNamespace(status=Status.CONNECTED), ipv4_address='10.209.29.93')
     panel = network_panel(manager)

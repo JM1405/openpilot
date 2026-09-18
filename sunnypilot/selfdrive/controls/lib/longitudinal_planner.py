@@ -138,4 +138,7 @@ class LongitudinalPlannerSP:
     e2eAlerts.greenLightAlert = self.e2e_alerts_helper.green_light_alert
     e2eAlerts.leadDepartAlert = self.e2e_alerts_helper.lead_depart_alert
 
+    if self.road_observer is not None:
+      self.road_observer.publish(longitudinalPlanSP.roadConstraint)
+
     pm.send('longitudinalPlanSP', plan_sp_send)

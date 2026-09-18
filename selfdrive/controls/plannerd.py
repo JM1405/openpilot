@@ -5,7 +5,8 @@ from openpilot.common.params import Params
 from openpilot.common.realtime import Priority, config_realtime_process
 from openpilot.common.swaglog import cloudlog
 from openpilot.selfdrive.controls.lib.ldw import LaneDepartureWarning
-from openpilot.selfdrive.controls.lib.longitudinal_planner import LongitudinalPlanner
+from openpilot.sunnypilot.selfdrive.controls.lib.road_constraints.runtime import create_planner
+from openpilot.sunnypilot.selfdrive.controls.lib.road_constraints.control_runtime import create_control_bridge
 import cereal.messaging as messaging
 
 
@@ -25,25 +26,35 @@ def main():
   ignore_services = ["liveMapDataSP", gps_location_service]
 
   ldw = LaneDepartureWarning()
-  longitudinal_planner = LongitudinalPlanner(CP, CP_SP)
+  longitudinal_planner, road_observer = create_planner(CP, CP_SP)
+  road_control = create_control_bridge()
   pm = messaging.PubMaster(['longitudinalPlan', 'driverAssistance', 'longitudinalPlanSP'])
   sm = messaging.SubMaster(['carControl', 'carState', 'controlsState', 'liveParameters', 'radarState', 'modelV2', 'selfdriveState',
                             'liveMapDataSP', 'carStateSP', 'selfdriveStateSP', gps_location_service],
                            poll='modelV2', ignore_alive=ignore_services, ignore_avg_freq=ignore_services, ignore_valid=ignore_services)
 
-  while True:
-    sm.update()
-    longitudinal_planner.sla.update_buttons(sm['selfdriveStateSP'].buttonsReleaseToggle)
-    if sm.updated['modelV2']:
-      longitudinal_planner.update(sm)
-      longitudinal_planner.publish(sm, pm)
+  try:
+    while True:
+      sm.update()
+      longitudinal_planner.sla.update_buttons(sm['selfdriveStateSP'].buttonsReleaseToggle)
+      if sm.updated['modelV2']:
+        longitudinal_planner.update(sm)
+        if road_control is None:
+          longitudinal_planner.publish(sm, pm)
+        else:
+          road_control.publish(longitudinal_planner, sm, pm)
 
-      ldw.update(sm.frame, sm['modelV2'], sm['carState'], sm['carControl'])
-      msg = messaging.new_message('driverAssistance')
-      msg.valid = sm.all_checks(['carState', 'carControl', 'modelV2', 'liveParameters'])
-      msg.driverAssistance.leftLaneDeparture = ldw.left
-      msg.driverAssistance.rightLaneDeparture = ldw.right
-      pm.send('driverAssistance', msg)
+        ldw.update(sm.frame, sm['modelV2'], sm['carState'], sm['carControl'])
+        msg = messaging.new_message('driverAssistance')
+        msg.valid = sm.all_checks(['carState', 'carControl', 'modelV2', 'liveParameters'])
+        msg.driverAssistance.leftLaneDeparture = ldw.left
+        msg.driverAssistance.rightLaneDeparture = ldw.right
+        pm.send('driverAssistance', msg)
+  finally:
+    if road_control is not None:
+      road_control.close()
+    if road_observer is not None:
+      road_observer.close()
 
 
 if __name__ == "__main__":

@@ -86,6 +86,8 @@ _services: dict[str, tuple] = {
   "modelManagerSP": (False, 1., 1, QueueSize.BIG),
   "backupManagerSP": (False, 1., 1, QueueSize.BIG),
   "selfdriveStateSP": (True, 100., 10),
+  "phoneRoadLocationSP": (True, 20.),
+  "roadConstraintsSP": (True, 20.),
   "longitudinalPlanSP": (True, 20., 10),
   "onroadEventsSP": (True, 1., 1),
   "carParamsSP": (True, 0.02, 1),

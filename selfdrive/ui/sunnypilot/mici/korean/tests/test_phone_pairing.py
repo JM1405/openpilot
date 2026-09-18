@@ -112,6 +112,22 @@ class PairingUiTest(unittest.TestCase):
     self.assertEqual(self.runtime.service.device_view()['sessions'],[])
     self.assertEqual(self.store.writes,[])
 
+  def test_home_receipt_and_route_buttons_open_and_render_without_writes(self):
+    self.page.connections = True
+    for action, expected_title in (('receipt', '카카오 수신'), ('route', '폰 경로')):
+      with self.subTest(action=action):
+        self.render()
+        with patch.object(self.native.gui_app, 'push_widget') as push:
+          self.tap(action)
+        child = push.call_args.args[0]
+        with patch.object(drawing, 'render_native'):
+          child._render(None)
+        texts = [str(a[0]) for op, a in drawing.commands() if op == 'alert_text']
+        self.assertTrue(any(expected_title in value for value in texts), texts)
+        child._handle_mouse_release(types.SimpleNamespace(x=30, y=25))
+        self.assertTrue(child.dismissed)
+    self.assertEqual(self.store.writes, [])
+
   def test_qr_geometry_and_bad_destinations(self):
     good=pairing_payload('https://192.168.255.254:65535','fe'*32,'001234')
     self.assertIn(':001234',good)

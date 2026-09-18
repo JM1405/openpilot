@@ -34,9 +34,12 @@ def badge_commands(status, width, height):
   x, y, w = width - 266, 14, 252
   drawing.draw_rectangle_rounded(drawing.Rectangle(x, y, w, 56), .25, 8, drawing.Color(12, 18, 24, 225))
   color = drawing.Color(107, 226, 198, 255) if getattr(status, 'selected', False) else drawing.Color(225, 229, 234, 255)
+  if getattr(status, 'warning', False):
+    color = drawing.Color(255, 190, 90, 255)
   drawing.alert_text(status.title, x + 12, y + 25, 20, color, 20)
   if status.detail:
-    drawing.alert_text(status.detail, x + 12, y + 46, 15, drawing.Color(202, 208, 216, 255), 15)
+    detail_color = color if getattr(status, 'warning', False) else drawing.Color(202, 208, 216, 255)
+    drawing.alert_text(status.detail, x + 12, y + 46, 15, detail_color, 15)
   return drawing.commands()
 
 
@@ -135,4 +138,6 @@ class DrivingStatusAugmentedRoadView(AugmentedRoadView):
 class RoadReasonAugmentedRoadView(DrivingStatusAugmentedRoadView):
   def __init__(self, *args, **kwargs):
     super().__init__(*args, **kwargs)
-    self._deceleration = DecelerationMonitor()
+    from openpilot.sunnypilot.selfdrive.controls.lib.road_constraints.runtime import control_enabled
+    from openpilot.selfdrive.ui.sunnypilot.mici.korean.deceleration import ControlDecelerationMonitor
+    self._deceleration = ControlDecelerationMonitor() if control_enabled() else DecelerationMonitor()

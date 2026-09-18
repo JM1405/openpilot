@@ -188,10 +188,14 @@ class Observation:
   event_review_reasons: tuple[str, ...] = ()
   curve_candidates: int = 0
   curve_rejections: tuple[str, ...] = ()
+  route_independent: bool = False
 
 
 class OfflineProvider:
-  def __init__(self, store: RoadStore, *, map_max_days=730, event_max_days=365, horizon_m=1000.0):
+  def __init__(self, store: RoadStore, *, map_max_days=730, event_max_days=365, horizon_m=1000.0, max_fix_interval_s=1.0):
+    if type(max_fix_interval_s) not in (int, float) or not 0 < max_fix_interval_s <= 1.25:
+      raise ValueError('invalidFixInterval')
+    self.max_fix_interval_s = max_fix_interval_s
     self.store = store
     self.map_max_days, self.event_max_days, self.horizon_m = map_max_days, event_max_days, horizon_m
     self.session, self.version, self.sequence = str(uuid.uuid4()), 0, 0
@@ -201,21 +205,28 @@ class OfflineProvider:
     self.hold_anchor = None
     self.holding = False
     self.route_identity = None
+    self.confirmed_match = None
 
   def reset(self, status):
     self.previous = self.previous_fix = self.last_path = None
+    self.confirmed_match = None
     self.hold_anchor = None
     self.holding = False
     self.version += 1
     return Observation(status)
 
-  def observe(self, fix: Fix, *, now: float, today: date, route=None) -> Observation:
+  def set_route(self, route):
     identity = (route.state, route.identity) if route is not None else ('none', '')
     if self.route_identity is not None and identity != self.route_identity:
-      self.reset('routeChanged')
+      # Raw GPS confirms the current road independently of the route. Discard
+      # the old branch/path, without discarding that measured continuity.
+      self.last_path = self.hold_anchor = None
+      self.version += 1
     self.route_identity = identity
-    if route is not None and (route.state == 'pending' or (route.state == 'active' and now >= route.valid_until)):
-      return self.reset(route.reason or 'routeExpired')
+
+  def observe(self, fix: Fix, *, now: float, today: date, route=None) -> Observation:
+    self.set_route(route)
+    self.confirmed_match = None
     if not all(type(v) in (int, float) and 0 <= v < 1e12 for v in (fix.observed_at, now)):
       return self.reset("invalidFix")
     try:
@@ -229,7 +240,7 @@ class OfflineProvider:
       dt = fix.observed_at - self.previous_fix.observed_at
       if dt <= 0:
         return self.reset("fixReplay")
-      if dt > 1.0:
+      if dt > self.max_fix_interval_s:
         self.reset("gap")
       elif distance((fix.lon, fix.lat), (self.previous_fix.lon, self.previous_fix.lat)) > (
         max(fix.speed_mps, self.previous_fix.speed_mps) * dt + 2 * (fix.accuracy_m + self.previous_fix.accuracy_m) + 5.0
@@ -241,18 +252,6 @@ class OfflineProvider:
     if self.holding:
       self.previous = self.last_path = self.hold_anchor = None
       self.holding = False
-
-    corridor = None
-    horizon_m = self.horizon_m
-    if route is not None and route.state == 'active':
-      from .route_hint import RouteCorridor
-      try:
-        corridor = RouteCorridor(route.points, fix)
-      except ValueError as error:
-        return self.reset(str(error))
-      horizon_m = min(horizon_m, corridor.horizon)
-      if horizon_m < 30.:
-        return self.reset('routeCoverageBoundary')
 
     candidates, nearby = [], []
     for link in self.store.nearby(fix.lon, fix.lat):
@@ -287,9 +286,6 @@ class OfflineProvider:
     if along <= margin or link.length - along <= margin:
       return self.reset('roadBoundaryUncertain')
 
-    if corridor is not None and not corridor.supports(link, along, min(link.length, along+horizon_m)):
-      return self.reset('routeRoadMismatch')
-
     old = self.previous
     old_fix = self.previous_fix
     self.previous, self.previous_fix = (link, along), fix
@@ -312,9 +308,50 @@ class OfflineProvider:
       self.version += 1
       self.hold_anchor = self.last_path = None
       return Observation('transitionConfirming', link_id=link.id, match_gap_m=gap)
+    self.confirmed_match = (fix, link, along, gap, now)
+    return self._derive(fix, link, along, gap, now=now, today=today, route=route)
+
+  def revalidate_route(self, *, now, today, route):
+    """Rebuild a path from an existing raw-confirmed road, never a new GPS fix.
+
+    Only the motion adapter uses this between fixes. It separately validates the
+    original anchor/uncertainty, continuous motion and estimated road ambiguity.
+    All source timestamps remain unchanged; no previous branch is copied.
+    """
+    self.set_route(route)
+    if self.confirmed_match is None:
+      return Observation('waitingForConfirmedRoad')
+    fix, link, along, gap, matched_at = self.confirmed_match
+    if not 0 <= now-fix.observed_at < self.max_fix_interval_s:
+      return self.reset('staleConfirmedRoad')
+    return self._derive(fix, link, along, gap, now=matched_at, today=today, route=route,
+                        route_now=now)
+
+  def _derive(self, fix, link, along, gap, *, now, today, route, route_now=None):
+    route_now = now if route_now is None else route_now
+    current_only = route is not None and (route.state == 'pending' or
+      (route.state == 'active' and route_now >= route.valid_until))
+    corridor = None
+    horizon_m = self.horizon_m
+    if current_only:
+      # Fresh GPS/map matching still proves this road. Recompute its constraints
+      # independently, but never retain or follow a future route branch.
+      horizon_m = min(horizon_m, link.length-along)
+    elif route is not None and route.state == 'active':
+      from .route_hint import RouteCorridor
+      try:
+        corridor = RouteCorridor(route.points, fix)
+      except ValueError as error:
+        return self.reset(str(error))
+      horizon_m = min(horizon_m, corridor.horizon)
+      if horizon_m < 30.:
+        return self.reset('routeCoverageBoundary')
+      if not corridor.supports(link, along, min(link.length, along+horizon_m)):
+        return self.reset('routeRoadMismatch')
     # Only an independently matched route may confirm one unique fork branch.
-    path, total, end_reason = [link], link.length - along, "distance"
-    while total < horizon_m and len(path) < 32:
+    path, total = [link], link.length - along
+    end_reason = 'routeUnavailableCurrentRoad' if current_only else 'distance'
+    while not current_only and total < horizon_m and len(path) < 32:
       successors = self.store.successors(path[-1])
       if len(successors) != 1:
         if corridor is None or not successors:
@@ -397,8 +434,9 @@ class OfflineProvider:
     snapshot = RoadSnapshot(
       "offline-derived:" + self.store.metadata.get("dataset_id", "unknown"), self.session, self.version, self.sequence, now, now, along, tuple(constraints)
     )
-    return Observation("derived", RoadInput(snapshot, context), link.id, gap, end_reason, unverified,
-                       tuple(sorted(review_reasons)), curve_count, tuple(sorted(curve_reasons)))
+    return Observation('currentRoadOnly' if current_only else 'derived', RoadInput(snapshot, context),
+                       link.id, gap, end_reason, unverified, tuple(sorted(review_reasons)),
+                       curve_count, tuple(sorted(curve_reasons)), route_independent=current_only)
 
   def hold_at_low_speed(self, fix, today):
     # Identity only: no road constraints at low speed, and fresh moving samples

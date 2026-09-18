@@ -110,7 +110,10 @@ class B1IntegrationTests(Fixture, unittest.TestCase):
     self.assertFalse(report.selected)
     self.assertEqual(report.selectedAcceleration, 0.)
     from openpilot.selfdrive.ui.sunnypilot.mici.korean.deceleration import explain
-    self.assertEqual(explain(report, self.now).detail, '커브 후보 · 제어 미적용')
+    self.assertTrue(report.unreachable)
+    display = explain(report, self.now)
+    self.assertEqual(display.detail, '감속 여유 부족 · 제어 미적용')
+    self.assertTrue(display.warning)
     self.now += .21
     self.assertFalse(self.report().hasCandidate)
     self.assertEqual(self.report().rejection, 'inputExpired')
@@ -218,6 +221,17 @@ class B1IntegrationTests(Fixture, unittest.TestCase):
     last = new.body.pop()
     self.assertIsInstance(last, ast.If)
     self.assertIn('self.road_observer', ast.unparse(last.test))
+    # D287 deliberately changed only the unset-cruise reference. Verify that
+    # exact exception, then normalize it before comparing the original AST.
+    at = next(i for i,n in enumerate(new.body) if isinstance(n,ast.Assign)
+              and ast.unparse(n.targets[0]) == 'v_cruise_initialized')
+    expected = ast.parse("v_cruise_initialized = sm['carState'].vCruise != V_CRUISE_UNSET\n"
+                         "v_cruise_kph = min(sm['carState'].vCruise, V_CRUISE_MAX)\n"
+                         "v_cruise = v_cruise_kph * CV.KPH_TO_MS if v_cruise_initialized else max(0.0, v_ego)").body
+    self.assertEqual([ast.dump(n) for n in new.body[at:at+3]], [ast.dump(n) for n in expected])
+    new.body[at:at+3] = ast.parse("v_cruise_kph = min(sm['carState'].vCruise, V_CRUISE_MAX)\n"
+                                 "v_cruise = v_cruise_kph * CV.KPH_TO_MS\n"
+                                 "v_cruise_initialized = sm['carState'].vCruise != V_CRUISE_UNSET").body
     # SHA-256 of the unmodified B1 update() AST captured before this integration.
     # Keeping the digest makes this check runnable without the desktop backup tree.
     self.assertEqual(hashlib.sha256(ast.dump(new).encode()).hexdigest(),

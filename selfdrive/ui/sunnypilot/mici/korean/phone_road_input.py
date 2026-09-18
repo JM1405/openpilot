@@ -33,6 +33,8 @@ class PhoneRoadInput:
 
   def _expire(self):
     self.service._expire()
+    if self.service.mode == 'home_receive':
+      self.receiver.clear('homeReceiveOnly',unsync=True)
     active = {s['id'] for s in self.service.sessions.values()}
     if self.receiver.owner is not None and self.receiver.owner not in active:
       # Keep monotonic sample revision/generation across authenticated sessions.

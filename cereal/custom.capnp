@@ -196,6 +196,35 @@ struct LongitudinalPlanSP @0xf35cc4560bbf6ec2 {
   aTarget @5 :Float32;
   events @6 :List(OnroadEventSP.Event);
   e2eAlerts @7 :E2eAlerts;
+  roadConstraint @8 :RoadConstraint;
+
+  struct RoadConstraint {
+    enabled @0 :Bool;
+    status @1 :Text;
+    rejection @2 :Text;
+    eventId @3 :Text;
+    kind @4 :Text;
+    hasCandidate @5 :Bool;
+    candidateAcceleration @6 :Float32;
+    selected @7 :Bool;
+    targetSpeed @8 :Float32;
+    distance @9 :Float32;
+    unreachable @10 :Bool;
+    actionTime @11 :Float32;
+    baseSource @12 :Text;
+    baseAcceleration @13 :Float32;
+    # One coherent main-planner decision for the read-only onroad explanation.
+    reportVersion @14 :UInt16;
+    planValid @15 :Bool;
+    plannedAt @16 :Float64;  # local monotonic seconds, never refreshed on publish
+    selectedSource @17 :Text;
+    selectedAcceleration @18 :Float32;
+    longitudinalActive @19 :Bool;
+    overridden @20 :Bool;
+    inputValidUntil @21 :Float64;  # retains original input / transport expiry
+    observationOnly @22 :Bool;
+  }
+
 
   struct DynamicExperimentalControl {
     state @0 :DynamicExperimentalControlState;
@@ -450,6 +479,10 @@ struct LiveMapDataSP @0xf416ec09499d9d19 {
 
 struct ModelDataV2SP @0xa1680744031fdb2d {
   laneTurnDirection @0 :TurnDirection;
+  modelRef @1 :Text;
+  modelName @2 :Text;
+  modelIdentityKnown @3 :Bool;
+  modelSignature @4 :Text;
 
   enum TurnDirection {
     none @0;
@@ -458,10 +491,98 @@ struct ModelDataV2SP @0xa1680744031fdb2d {
   }
 }
 
-struct CustomReserved10 @0xcb9fd56c7057593a {
+struct PhoneRoadLocationSP @0xcb9fd56c7057593a {
+  publisherEpoch @0 :Text;
+  publisherStartedNs @1 :UInt64;
+  publishSequence @2 :UInt64;
+  schemaVersion @3 :UInt16;
+  sampleRevision @4 :UInt64;
+  generation @5 :UInt64;
+  status @6 :Text;
+  validUntilNs @7 :UInt64;
+  uncertaintyNs @8 :UInt64;
+  hasFix @9 :Bool;
+  fix @10 :Fix;
+  sdkEventsJson @12 :Text; # Fresh authenticated SDK geometry, independently matched by roadinputd.
+  routeHintJson @11 :Text;  # Bounded original-coordinate window; no persistence or control command.
+
+  hasAnchor @13 :Bool;
+  anchor @14 :Fix;
+  anchorUntilNs @15 :UInt64;
+  anchorAcceptedNs @16 :UInt64;
+  anchorUncertaintyNs @17 :UInt64;
+
+  struct Fix {
+    longitude @0 :Float64;
+    latitude @1 :Float64;
+    bearingDeg @2 :Float64;
+    speedMps @3 :Float64;
+    accuracyM @4 :Float64;
+    bearingAccuracyDeg @5 :Float64;
+    observedAt @6 :Float64;  # Receiver monotonic seconds; never retimestamp at IPC receipt.
+    hasBearing @7 :Bool; # false means unavailable, never an inferred north heading
+  }
 }
 
-struct CustomReserved11 @0xc2243c65e0340384 {
+struct RoadConstraintsSP @0xc2243c65e0340384 {
+  publisherEpoch @0 :Text;
+  publisherStartedNs @1 :UInt64;
+  publishSequence @2 :UInt64;
+  schemaVersion @3 :UInt16;
+  status @4 :Text;
+  hasInput @5 :Bool;
+  validUntilNs @6 :UInt64;  # Minimum of original GPS deadline and upstream process lease.
+  input @7 :RoadInput;
+  dataset @8 :DatasetStatus;
+
+  struct DatasetStatus {
+    state @0 :Text;
+    datasetId @1 :Text;
+    revision @2 :UInt64;
+    latestRoadDate @3 :Text;
+    links @4 :UInt32;
+    verifiedEvents @5 :UInt32;
+  }
+
+  struct Link {
+    roadId @0 :Text;
+    direction @1 :Text;
+  }
+  struct Constraint {
+    eventId @0 :Text;
+    kind @1 :Text;
+    link @2 :Link;
+    startM @3 :Float64;
+    endM @4 :Float64;
+    targetSpeed @5 :Float64;
+  }
+  struct Snapshot {
+    source @0 :Text;
+    session @1 :Text;
+    pathVersion @2 :UInt64;
+    sequence @3 :UInt64;
+    hasSourceAt @4 :Bool;
+    sourceAt @5 :Float64;
+    receivedAt @6 :Float64;
+    referenceProgressM @7 :Float64;
+    constraints @8 :List(Constraint);
+  }
+  struct Context {
+    session @0 :Text;
+    pathVersion @1 :UInt64;
+    path @2 :List(Link);
+    progressM @3 :Float64;
+    observedAt @4 :Float64;
+    confirmed @5 :Bool;
+    motionEstimated @6 :Bool;
+    gpsObservedAt @7 :Float64;
+    gpsUncertaintyS @8 :Float64;
+    positionErrorM @9 :Float64;
+  }
+  struct RoadInput {
+    snapshot @0 :Snapshot;
+    context @1 :Context;
+  }
 }
 
 struct CustomReserved12 @0x9ccdc8676701b412 {

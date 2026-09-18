@@ -62,13 +62,17 @@ class RouteIntegrationTests(base.Fixture,unittest.TestCase):
     self.send_route(location_age_ms=4000)
     sample=self.api.sample();self.publisher.publish(sample,self.service.route.hint(self.api.receiver.owner,sample.fix))
     self.deriver.tick();self.observer.update(self.sm,self.cp,.05,0.,'e2e',True)
-    self.assertIsNone(self.reader.road);self.assertIsNone(self.observer.plan.acceleration)
+    self.assertEqual([r.road_id for r in self.reader.road.context.path],['a'])
+    self.assertTrue(all(c.link.road_id=='a' for c in self.reader.road.snapshot.constraints))
+    self.assertNotEqual(self.observer.plan.kind,'curve')
     self.send_route(location_age_ms=0)
-    self.tick(112);self.assertIsNone(self.reader.road)
+    self.tick(112);self.assertIsNotNone(self.reader.road)
     self.tick(114);self.tick(116);self.assertIsNotNone(self.reader.road)
     self.send_route(revision=2,state='rerouting',shape_id='',point_count=0,geometry_status='unavailable',matched=False,
       location_age_ms=None,total_m=None,total_s=None,remaining_m=None,remaining_s=None)
-    self.tick(118);self.assertIsNone(self.reader.road)
+    self.tick(118)
+    self.assertEqual([r.road_id for r in self.reader.road.context.path],['a'])
+    self.assertNotEqual(self.observer.plan.kind,'curve')
 
   def test_hint_deadline_and_invalid_payload_cannot_refresh_old_branch(self):
     self.setup_route();self.warm()
@@ -77,10 +81,11 @@ class RouteIntegrationTests(base.Fixture,unittest.TestCase):
     self.deriver.tick();self.observer.update(self.sm,self.cp,.05,0.,'e2e',True)
     self.assertIsNone(self.reader.road)
 
-  def test_route_end_reconfirms_free_drive_without_old_fork(self):
+  def test_route_end_rebuilds_free_drive_without_old_fork(self):
     self.setup_route();self.warm()
     self.send_route(revision=2,state='ended',shape_id='',point_count=0,geometry_status='unavailable',matched=False,
       location_age_ms=None,total_m=None,total_s=None,remaining_m=None,remaining_s=None)
-    self.tick(112);self.assertIsNone(self.reader.road)
+    self.tick(112)
+    self.assertEqual([r.road_id for r in self.reader.road.context.path],['a'])
     self.tick(114);self.tick(116)
     self.assertEqual([r.road_id for r in self.reader.road.context.path],['a'])

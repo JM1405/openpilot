@@ -201,6 +201,63 @@ class HomeReceivePage(Widget):
     self.actions = []
 
 
+class KakaoStatusPage(Widget):
+  def __init__(self, runtime):
+    super().__init__()
+    self.runtime = runtime
+    self.set_rect(rl.Rectangle(0, 0, 536, 240))
+
+  def _render(self, _):
+    state = self.runtime.service.kakao.view()
+    drawing.begin_frame()
+    drawing.draw_rectangle(0, 0, 536, 240, drawing.Color(8, 17, 19, 255))
+    text('‹ 뒤로', 16, 10, 19)
+    home = self.runtime.service.mode == HOME_MODE
+    text('집 테스트 / 카카오 수신' if home else '카카오 수신', 175 if home else 215, 10, 20)
+    text(state['reason'], 20, 49, 16)
+    counts = {kind: sum(e['kind'] == kind for e in state['events']) for kind in ('camera', 'section', 'bump', 'sharp_turn')}
+    text(f"단속 {counts['camera']} / 구간 {counts['section']} / 방지턱 {counts['bump']} / 급커브 {counts['sharp_turn']}", 20, 84, 16)
+    text('GPS 유효' if state['location_fresh'] else 'GPS 대기 / 만료', 20, 119, 16)
+    text('전방 도로 / 코너 속도 확인 전', 20, 154, 16)
+    text('수신 확인용 / 자동 감속 연결 안 됨', 20, 204, 15, (255, 201, 113, 255))
+    drawing.render_native(drawing.commands(), offset=(self.rect.x, self.rect.y))
+
+  def _handle_mouse_release(self, pos):
+    if pos.x-self.rect.x < 110 and pos.y-self.rect.y < 40:
+      self.dismiss()
+
+
+class RouteStatusPage(Widget):
+  def __init__(self, runtime):
+    super().__init__()
+    self.runtime = runtime
+    self.set_rect(rl.Rectangle(0, 0, 536, 240))
+
+  def _render(self, _):
+    state = self.runtime.service.route.view()
+    drawing.begin_frame()
+    drawing.draw_rectangle(0, 0, 536, 240, drawing.Color(8, 17, 19, 255))
+    text('‹ 뒤로', 16, 10, 19)
+    text('폰 경로', 220, 10, 21)
+    text(state['destination'][:26] or '목적지 대기', 20, 54, 21)
+    text(state['reason'], 20, 91, 17)
+    if state['remaining_m'] is not None and state['remaining_s'] is not None:
+      text(f"{state['remaining_m']/1000:.1f} km / {(state['remaining_s']+59)//60:.0f}분", 20, 127, 20)
+    turn = state.get('turn')
+    if turn:
+      dist = f"{turn['distance_m']/1000:.1f} km" if turn['distance_m'] >= 1000 else f"{turn['distance_m']:.0f} m"
+      text(f"{dist} / {turn['label']}", 20, 166, 20, (85, 222, 170, 255))
+    else:
+      text(f"경로 좌표 {state['point_count']}개" if state['point_count'] else '경로 형상 대기 / 보류', 20, 166, 15)
+    text('집 수신 전용 / 차량 제어 없음' if self.runtime.service.mode == HOME_MODE else '감속 여부는 주행 화면에서 확인해',
+         20, 212, 14, (255, 201, 113, 255))
+    drawing.render_native(drawing.commands(), offset=(self.rect.x, self.rect.y))
+
+  def _handle_mouse_release(self, pos):
+    if pos.x-self.rect.x < 110 and pos.y-self.rect.y < 40:
+      self.dismiss()
+
+
 class RoadStatusPage(Widget):
   def __init__(self, runtime):
     super().__init__()

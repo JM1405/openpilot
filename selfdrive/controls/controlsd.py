@@ -21,6 +21,7 @@ from openpilot.selfdrive.modeld.modeld import LAT_SMOOTH_SECONDS
 from openpilot.selfdrive.locationd.helpers import PoseCalibrator, Pose
 
 from openpilot.sunnypilot.selfdrive.controls.controlsd_ext import ControlsExt
+from openpilot.sunnypilot.selfdrive.controls.lib.road_constraints.control_runtime import RoadControlConsumer
 
 State = log.SelfdriveState.OpenpilotState
 LaneChangeState = log.LaneChangeState
@@ -55,6 +56,7 @@ class Controls(ControlsExt):
     self.calibrated_pose: Pose | None = None
 
     self.LoC = LongControl(self.CP, self.CP_SP)
+    self.road_control = RoadControlConsumer()
     self.VM = VehicleModel(self.CP)
     self.LaC: LatControl
     if self.CP.steerControlType == car.CarParams.SteerControlType.angle:
@@ -131,7 +133,10 @@ class Controls(ControlsExt):
 
     # accel PID loop
     pid_accel_limits = self.CI.get_pid_accel_limits(self.CP, self.CP_SP, CS.vEgo, CS.vCruise * CV.KPH_TO_MS)
-    actuators.accel = float(self.LoC.update(CC.longActive, CS, long_plan.aTarget, long_plan.shouldStop, pid_accel_limits))
+    a_target, should_stop = self.road_control.target_for(self.sm, active=CC.longActive,
+      overridden=bool(CS.gasPressed or CS.brakePressed or CS.regenBraking or CS.brakeHoldActive), vehicle_valid=self.CP.openpilotLongitudinalControl)
+    actuators.accel = float(self.LoC.update(CC.longActive, CS, a_target, should_stop, pid_accel_limits))
+    self.road_control.observe_pid(self.LoC.long_control_state, active=CC.longActive and not (CS.gasPressed or CS.brakePressed or CS.regenBraking or CS.brakeHoldActive))
 
     # Steering PID loop and lateral MPC
     # Reset desired curvature to current to avoid violating the limits on engage
@@ -172,7 +177,10 @@ class Controls(ControlsExt):
 
     CC.cruiseControl.override = CC.enabled and not CC.longActive and (self.CP.openpilotLongitudinalControl or not self.CP_SP.pcmCruiseSpeed)
     CC.cruiseControl.cancel = CS.cruiseState.enabled and (not CC.enabled or not self.CP.pcmCruise)
-    CC.cruiseControl.resume = CC.enabled and CS.cruiseState.standstill and not self.sm['longitudinalPlan'].shouldStop
+    # Pre-enable, pedals and reported hold must never request a standstill exit.
+    CC.cruiseControl.resume = (CC.enabled and self.sm['selfdriveState'].active and CS.cruiseState.standstill and
+                              not self.sm['longitudinalPlan'].shouldStop and
+                              not (CS.brakePressed or CS.regenBraking or CS.brakeHoldActive or CS.gasPressed))
 
     hudControl = CC.hudControl
     hudControl.setSpeed = float(CS.vCruiseCluster * CV.KPH_TO_MS)
@@ -209,6 +217,7 @@ class Controls(ControlsExt):
     cs.lateralPlanMonoTime = self.sm.logMonoTime['modelV2']
     cs.desiredCurvature = self.desired_curvature
     cs.longControlState = self.LoC.long_control_state
+    self.road_control.write_feedback(cs.roadControl)
     cs.upAccelCmd = float(self.LoC.pid.p)
     cs.uiAccelCmd = float(self.LoC.pid.i)
     cs.ufAccelCmd = float(self.LoC.pid.f)

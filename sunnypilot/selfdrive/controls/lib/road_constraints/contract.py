@@ -43,6 +43,10 @@ class RoadContext:
   progress_m: float
   observed_at: float
   confirmed: bool = True
+  motion_estimated: bool = False
+  gps_observed_at: float = 0.
+  gps_uncertainty_s: float = 0.
+  position_error_m: float = 0.
 
 
 @dataclass(frozen=True)
@@ -110,6 +114,15 @@ class RoadInputValidator:
         return label + "Clock"
       if now - stamp > max_age:
         return label + "Stale"
+    if c.motion_estimated:
+      if (not all(math.isfinite(v) for v in (c.gps_observed_at,c.gps_uncertainty_s,c.position_error_m))
+          or not 0 <= c.gps_uncertainty_s <= .052 or not 0 < c.position_error_m <= 15.
+          or not 0 <= c.gps_observed_at <= c.observed_at
+          or now-c.gps_observed_at+c.gps_uncertainty_s >= 1.25
+          or now-c.observed_at > .15):
+        return "motionContextExpiredOrUncertain"
+    elif c.gps_observed_at or c.gps_uncertainty_s or c.position_error_m:
+      return "unexpectedMotionProvenance"
     if s.source_at > s.received_at + limits.future_tolerance:
       return "sourceAfterReceive"
     if not all(math.isfinite(x) and x >= 0 for x in (c.progress_m, s.reference_progress_m)):

@@ -1,0 +1,12 @@
+{
+  "candidate": "D293",
+  "profile": "koranipilot-dev",
+  "source_base": "c440933a65fa2c669a9926c8112ae352d3600f07",
+  "phone_version": "0.21-model-selection",
+  "model_change": true,
+  "model_download_requires": "ignition_on_fresh_park_standstill_disengaged",
+  "road_input": false,
+  "road_control": false,
+  "active_device_install_changed": false,
+  "real_vehicle_model_switch_verified": false
+}

@@ -155,7 +155,10 @@ class LiveTests(Fixture, unittest.TestCase):
     self.assertEqual(self.api.sample().fix.observed_at, observed)
     self.now += 0.03
     self.assertIsNone(self.api.sample().fix)
-    self.assertEqual(self.api.view()['status'], 'inputExpired')
+    self.assertEqual(self.api.view()['status'], 'awaitingNextFix')
+    self.assertIsNotNone(self.api.sample().anchor)
+    self.now += 1.3
+    self.assertIsNone(self.api.sample().anchor)
 
   def test_clock_mapping_expires_even_with_ongoing_fixes(self):
     self.synchronize()
@@ -164,13 +167,27 @@ class LiveTests(Fixture, unittest.TestCase):
     self.now += 0.3
     self.rejects('fix', self.packet(), 'syncRequired')
 
-  def test_new_sync_needs_new_fix_and_old_epoch_cannot_replay(self):
+  def test_compatible_sync_preserves_original_deadline_but_rejects_old_epoch(self):
     self.synchronize()
     self.receive()
+    before = self.api.sample()
+    old_packet = self.packet()
     self.synchronize()
-    self.assertIsNone(self.api.sample().fix)
+    after = self.api.sample()
+    self.assertEqual(after.fix, before.fix)
+    self.assertEqual(after.anchor, before.anchor)
+    self.assertEqual(after.anchor_until_ns, before.anchor_until_ns)
+    self.assertEqual(after.generation, before.generation)
+    self.rejects('fix', old_packet, 'syncRequired')
+    self.assertIsNone(self.api.sample().anchor)
+
+  def test_clock_step_revokes_anchor_and_road_confirmation(self):
+    self.synchronize()
     self.receive()
-    self.assertIsNotNone(self.api.sample().fix)
+    generation = self.api.sample().generation
+    self.synchronize(offset=89.0)
+    self.assertIsNone(self.api.sample().anchor)
+    self.assertGreater(self.api.sample().generation, generation)
 
   def test_schema_bool_clock_future_missing_mock_and_quality_clear_previous(self):
     cases = [
@@ -304,6 +321,45 @@ class AdapterTests(Fixture, unittest.TestCase):
     self.receive(24)
     self.assertIsNone(self.adapter(self.now))
     self.receive(26)
+    self.assertIsNotNone(self.adapter(self.now))
+
+  def test_route_recovery_between_fixes_preserves_source_time_and_expiry(self):
+    from ..route_hint import RouteHint
+    route=[RouteHint('pending','new',reason='rerouting')]
+    self.adapter.route=lambda:route[0]
+    self.receive(20);self.assertIsNone(self.adapter(self.now))
+    self.receive(22);current=self.adapter(self.now)
+    self.assertTrue(self.adapter.observation.route_independent)
+    self.assertEqual([r.road_id for r in current.context.path],['a'])
+    sample=self.api.sample();original=self.provider.previous_fix
+    route[0]=RouteHint('active','new',tuple(point(x) for x in range(0,351,50)),self.now+1.)
+    self.now+=.03
+    road=self.adapter(self.now)
+    self.assertIsNotNone(road)
+    self.assertEqual(road.context.observed_at,original.observed_at)
+    self.assertIs(self.provider.previous_fix,original)
+    self.assertEqual(self.api.sample().valid_until_ns,sample.valid_until_ns)
+    self.now=sample.valid_until_ns/NS+.001
+    self.assertIsNone(self.adapter(self.now))
+
+  def test_route_recovery_does_not_replace_two_raw_matches(self):
+    from ..route_hint import RouteHint
+    route=[RouteHint('pending','new',reason='rerouting')]
+    self.adapter.route=lambda:route[0]
+    self.receive(20);self.assertIsNone(self.adapter(self.now))
+    route[0]=RouteHint('active','new',tuple(point(x) for x in range(0,351,50)),self.now+1.)
+    self.now+=.03;self.assertIsNone(self.adapter(self.now))
+
+  def test_same_route_expiry_recovery_revalidates_without_extending_gps(self):
+    from ..route_hint import RouteHint
+    route=[RouteHint()];self.adapter.route=lambda:route[0]
+    self.receive(20);self.adapter(self.now)
+    self.receive(22);self.assertIsNotNone(self.adapter(self.now))
+    route[0]=RouteHint('active','same',tuple(point(x) for x in range(0,351,50)),self.now+.02)
+    self.assertIsNotNone(self.adapter(self.now))
+    self.now+=.03;self.assertIsNotNone(self.adapter(self.now))
+    self.assertTrue(self.adapter.observation.route_independent)
+    route[0]=replace(route[0],valid_until=self.now+.03)
     self.assertIsNotNone(self.adapter(self.now))
 
 

@@ -1,88 +1,13 @@
-# Koranipilot (고라니파일럿)
+# Koranipilot · 고라니파일럿
 
-> **EXPERIMENTAL B1 HOME RECEPTION — NOT A DRIVING RELEASE**
->
-> C4 집 테스트용이야. 폰 연결 메뉴/HTTPS가 켜지며 집 수신은 C4에서 직접 켜야 해.
-> 폰 설정·모델 변경과 도로 입력은 꺼져 있어. 설치·최초 연결은 사용자 보고이며 안정적 수신·차량 동작은 미검증이야.
-> Home test only. Initial connection is user-reported; sustained reception and vehicle operation remain unverified.
+**D293 개발 소스 · 실차 검증 완료 릴리스가 아님.** sunnypilot 기반 comma four / Android 개인용 개발 프로젝트.
 
-[QR phone pairing, startup repair, usage guide and restoration](KORANIPILOT_HOME.md). Requires Android manager v0.12-qr-pairing for scanning.
+폰 앱 **기기 → 주행 모델**에서 호환 모델을 선택한다. 차량 ON, P단, 정차, 주행 보조 비활성 조건을 요청·다운로드·저장 때 확인한다. 실패나 취소 시 기존 모델을 유지하며, 다운로드 완료와 다음 기동 후 실제 실행 확인을 구분한다. 기본 CD210 복귀도 지원한다.
 
-This revision keeps phone telemetry updates running when the C4 display sleeps. The original 1.5-second freshness gate and receive-only restrictions remain enforced. Local regression tests pass; physical C4 recovery still needs verification.
+[모델 교체·검증·빌드](docs/koranipilot/model-selection-d293.md) · [Android 앱](phone/android/README.md)
 
-Android manager v0.16 adds a searchable, typed catalog of 74 Sunny settings in 10 groups. This candidate exposes their saved values over the existing approved HTTPS session. Home mode remains read-only; vehicle writes remain disabled by the deployment flag. Nine incompatible C4 visual options, two deferred lane-change options and three vehicle test modes are explicitly locked. Local/Android tests do not establish physical C4 application or road validation.
+D290의 크루즈 미설정 MPC 및 늦은 경로 복구 수정도 포함한다. 도로 입력/자동 감속은 기본 OFF다. 합성 검증과 집 기동은 차량·도로 성능 입증이 아니다. 현재 장치 D290은 이번 게시로 자동 변경되지 않는다.
 
-![](https://user-images.githubusercontent.com/47793918/233812617-beab2e71-57b9-479e-8bff-c3931347ca40.png)
+`koranipilot-dev`는 원본 전체 소스와 변경을 보관하는 브랜치다. 기존 `koranipilot-b1-home` 배포 브랜치는 유지한다. 모델 가중치를 새로 학습한 릴리스가 아니며 upstream 호환 모델 카탈로그를 사용한다.
 
-## 🌞 What is sunnypilot?
-[sunnypilot](https://github.com/sunnyhaibin/sunnypilot) is a fork of comma.ai's openpilot, an open source driver assistance system. sunnypilot offers the user a unique driving experience for over 300+ supported car makes and models with modified behaviors of driving assist engagements. sunnypilot complies with comma.ai's safety rules as accurately as possible.
-
-## 💭 Join our Community Forum
-Join the official sunnypilot community forum to stay up to date with all the latest features and be a part of shaping the future of sunnypilot!
-* https://community.sunnypilot.ai/
-
-## Documentation
-https://docs.sunnypilot.ai/ is your one stop shop for everything from features to installation to FAQ about the sunnypilot
-
-## 🚘 Running on a dedicated device in a car
-First, check out this list of items you'll need to [get started](https://community.sunnypilot.ai/t/getting-started-using-sunnypilot-in-your-supported-car/251).
-
-## Installation
-Next, refer to the sunnypilot community forum for [installation instructions](https://community.sunnypilot.ai/t/read-before-installing-sunnypilot/254), as well as a complete list of [Recommended Branch Installations](https://community.sunnypilot.ai/t/recommended-branch-installations/235).
-
-## 🎆 Pull Requests
-We welcome both pull requests and issues on GitHub. Bug fixes are encouraged.
-
-Pull requests should be against the most current `master` branch.
-
-## 📊 User Data
-
-By default, sunnypilot uploads the driving data to comma servers. You can also access your data through [comma connect](https://connect.comma.ai/).
-
-sunnypilot is open source software. The user is free to disable data collection if they wish to do so.
-
-sunnypilot logs the road-facing camera, CAN, GPS, IMU, magnetometer, thermal sensors, crashes, and operating system logs.
-The driver-facing camera and microphone are only logged if you explicitly opt-in in settings.
-
-By using this software, you understand that use of this software or its related services will generate certain types of user data, which may be logged and stored at the sole discretion of comma. By accepting this agreement, you grant an irrevocable, perpetual, worldwide right to comma for the use of this data.
-
-## Licensing
-
-sunnypilot is released under the [MIT License](LICENSE). This repository includes original work as well as significant portions of code derived from [openpilot by comma.ai](https://github.com/commaai/openpilot), which is also released under the MIT license with additional disclaimers.
-
-The original openpilot license notice, including comma.ai’s indemnification and alpha software disclaimer, is reproduced below as required:
-
-> openpilot is released under the MIT license. Some parts of the software are released under other licenses as specified.
->
-> Any user of this software shall indemnify and hold harmless Comma.ai, Inc. and its directors, officers, employees, agents, stockholders, affiliates, subcontractors and customers from and against all allegations, claims, actions, suits, demands, damages, liabilities, obligations, losses, settlements, judgments, costs and expenses (including without limitation attorneys’ fees and costs) which arise out of, relate to or result from any use of this software by user.
->
-> **THIS IS ALPHA QUALITY SOFTWARE FOR RESEARCH PURPOSES ONLY. THIS IS NOT A PRODUCT.
-> YOU ARE RESPONSIBLE FOR COMPLYING WITH LOCAL LAWS AND REGULATIONS.
-> NO WARRANTY EXPRESSED OR IMPLIED.**
-
-For full license terms, please see the [`LICENSE`](LICENSE) file.
-
-## 💰 Support sunnypilot
-If you find any of the features useful, consider becoming a [sponsor on GitHub](https://github.com/sponsors/sunnyhaibin) to support future feature development and improvements.
-
-
-By becoming a sponsor, you will gain access to exclusive content, early access to new features, and the opportunity to directly influence the project's development.
-
-
-<h3>GitHub Sponsor</h3>
-
-<a href="https://github.com/sponsors/sunnyhaibin">
-  <img src="https://user-images.githubusercontent.com/47793918/244135584-9800acbd-69fd-4b2b-bec9-e5fa2d85c817.png" alt="Become a Sponsor" width="300" style="max-width: 100%; height: auto;">
-</a>
-<br>
-
-<h3>PayPal</h3>
-
-<a href="https://paypal.me/sunnyhaibin0850" target="_blank">
-<img src="https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif" alt="PayPal this" title="PayPal - The safer, easier way to pay online!" border="0" />
-</a>
-<br></br>
-
-Your continuous love and support are greatly appreciated! Enjoy 🥰
-
-<span>-</span> Jason, Founder of sunnypilot
+원본 프로젝트·라이선스: [sunnypilot](https://github.com/sunnypilot/sunnypilot), [LICENSE.md](LICENSE.md).

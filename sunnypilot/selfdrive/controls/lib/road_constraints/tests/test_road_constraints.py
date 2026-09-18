@@ -124,6 +124,25 @@ class TestRoadPlanning(unittest.TestCase):
     params.update(kwargs)
     return (planner or RoadConstraintPlanner()).update(data or make_input(), **params)
 
+  def test_motion_error_keeps_camera_until_entire_position_interval_passes(self):
+    data=make_input(progress=253.)
+    data=replace(data,context=replace(data.context,motion_estimated=True,gps_observed_at=99.5,
+      gps_uncertainty_s=.02,position_error_m=5.))
+    plan=self.plan(data=data)
+    self.assertEqual(plan.event_id,EVENT.event_id)
+    self.assertEqual(plan.distance,-8.)
+    self.assertLess(plan.acceleration,0.)
+    passed=replace(data,context=replace(data.context,progress_m=256.))
+    self.assertEqual(self.plan(data=passed).status,'clear')
+
+  def test_motion_error_brakes_for_nearest_plausible_point(self):
+    data=make_input(progress=100.)
+    data=replace(data,context=replace(data.context,motion_estimated=True,gps_observed_at=99.5,
+      gps_uncertainty_s=.02,position_error_m=5.))
+    plan=self.plan(data=data)
+    self.assertEqual(plan.distance,145.)
+    self.assertLessEqual(plan.acceleration,self.plan(data=make_input(progress=100.)).acceleration)
+
   def test_kinematics_known_constant_acceleration_and_braking(self):
     self.assertEqual(advance(20, -2, 0, 2), (36, 16))
     distance = braking_distance(25, 0, 10, RoadLimits())

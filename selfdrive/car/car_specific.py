@@ -136,7 +136,7 @@ class CarSpecificEvents:
       events.add(EventName.steerOverride)
     if CS.steeringDisengage and not CS_prev.steeringDisengage:
       events.add(EventName.steerDisengage)
-    if CS.brakePressed and CS.standstill:
+    if CS.standstill and (CS.brakePressed or CS.regenBraking or CS.brakeHoldActive):
       events.add(EventName.preEnableStandstill)
     if CS.gasPressed:
       events.add(EventName.gasPressedOverride)

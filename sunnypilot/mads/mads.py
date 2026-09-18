@@ -62,14 +62,14 @@ class ModularAssistiveDrivingSystem:
     self.unified_engagement_mode = self.params.get_bool("MadsUnifiedEngagementMode")
 
   def pedal_pressed_non_gas_pressed(self, CS: structs.CarState) -> bool:
-    # ignore `pedalPressed` events caused by gas presses
-    if self.events.has(EventName.pedalPressed) and not (CS.gasPressed and not self.selfdrive.CS_prev.gasPressed and self.disengage_on_accelerator):
-      return True
-
-    return False
+    if not self.events.has(EventName.pedalPressed):
+      return False
+    # selfdrived owns the event cause; a separately cached gas setting cannot
+    # override simultaneous braking or reinterpret an existing pedal event.
+    return bool(CS.brakePressed or CS.regenBraking or not (CS.gasPressed and not self.selfdrive.CS_prev.gasPressed))
 
   def should_silent_lkas_enable(self, CS: structs.CarState) -> bool:
-    if self.steering_mode_on_brake == MadsSteeringModeOnBrake.PAUSE and self.pedal_pressed_non_gas_pressed(CS):
+    if self.steering_mode_on_brake == MadsSteeringModeOnBrake.PAUSE and (CS.brakePressed or CS.regenBraking or self.pedal_pressed_non_gas_pressed(CS)):
       return False
 
     if self.events_sp.contains_in_list(GEARS_ALLOW_PAUSED_SILENT):

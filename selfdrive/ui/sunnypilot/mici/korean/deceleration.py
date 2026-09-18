@@ -17,6 +17,7 @@ class DecelerationStatus:
   title: str
   detail: str = ''
   selected: bool = False
+  warning: bool = False
 
 
 WAITING = DecelerationStatus('waiting', '감속 상태 확인 대기')
@@ -26,9 +27,9 @@ def recent(stamp, now):
   return math.isfinite(stamp) and stamp > 0 and -.01 <= now - stamp <= LEASE
 
 
-def explain(report, now, *, metric=True):
+def explain(report, now, *, metric=True, coherent=False):
   """Validated transport and live driver gates are checked by DecelerationMonitor."""
-  if (report.reportVersion != 1 or not report.planValid or not recent(report.plannedAt, now)
+  if (report.reportVersion not in ((1, 2, 3) if coherent else (1,)) or not report.planValid or not recent(report.plannedAt, now)
       or not math.isfinite(report.selectedAcceleration) or abs(report.selectedAcceleration) > 10):
     return WAITING
   if not report.enabled:
@@ -43,9 +44,16 @@ def explain(report, now, *, metric=True):
   input_fresh = (report.status in ('constraint', 'clear', 'approaching') and math.isfinite(report.inputValidUntil)
                  and now < report.inputValidUntil <= report.plannedAt + .21)
   candidate = report.hasCandidate and report.status == 'constraint' and input_fresh
+  # A stronger base brake may win arbitration, but that does not make a late
+  # road target attainable. Preserve the fresh shortfall warning independently
+  # of who owns acceleration, without changing the reported control source.
+  shortfall = bool(candidate and report.unreachable and report.kind in KINDS and report.eventId
+                   and math.isfinite(report.targetSpeed) and 0 < report.targetSpeed <= 70
+                   and math.isfinite(report.distance) and abs(report.distance) <= 10000)
   if getattr(report, 'observationOnly', False):
     return DecelerationStatus('observation', '도로 후보 관찰',
-      (KINDS.get(report.kind, '도로') + ' 후보 · 제어 미적용') if candidate else '도로 입력 확인 대기')
+      ('감속 여유 부족 · 제어 미적용' if shortfall else
+       KINDS.get(report.kind, '도로') + ' 후보 · 제어 미적용') if candidate else '도로 입력 확인 대기', warning=shortfall)
   if source == 'road':
     if not report.hasCandidate:
       return WAITING
@@ -64,14 +72,32 @@ def explain(report, now, *, metric=True):
     if report.unreachable:
       detail = '목표 감속 여유 부족'
     if report.selectedAcceleration < -.01:
-      return DecelerationStatus('road', KINDS[report.kind] + ' 감속 계획', detail, True)
-    return DecelerationStatus('limiting', KINDS[report.kind] + ' 가속 제한', detail)
+      return DecelerationStatus('road', KINDS[report.kind] + ' 감속 계획', detail, True, shortfall)
+    return DecelerationStatus('limiting', KINDS[report.kind] + ' 가속 제한', detail, warning=shortfall)
   detail = '도로 후보 대기' if candidate else ('도로 입력 확인됨' if input_fresh else '도로 입력 확인 대기')
+  if shortfall:
+    detail = '목표 감속 여유 부족'
   if report.selectedAcceleration < -.01:
     # E2E does not explain whether it saw a bend, signal, crossing or another cause.
-    return DecelerationStatus('base', SOURCES[source] + ' 감속 계획', detail, True)
+    return DecelerationStatus('base', SOURCES[source] + ' 감속 계획', detail, True, shortfall)
   return DecelerationStatus('candidate' if candidate else 'ready', '도로 후보 대기' if candidate else '감속 계획 없음',
-                            '' if candidate else detail)
+                            detail if shortfall or not candidate else '', warning=shortfall)
+
+
+def explain_control_command(command, now, *, metric=True):
+  """Display the CommandReader result used by the consumer at this same tick.
+
+  None (including ordering/driver rejection) clears the display. Call the reader
+  again each tick; do not retain a resolved command across driver-state changes.
+  The existing v1 observer/monitor entry point remains unchanged.
+  """
+  from types import SimpleNamespace
+  if (command is None or not math.isfinite(now) or now >= command.valid_until
+      or (command.selected and command.report['status'] == 'constraint' and now >= command.report['inputValidUntil'])):
+    return WAITING
+  if command.should_stop:
+    return DecelerationStatus('stopping', '정지 계획', '기본 제어의 정지 요청', True)
+  return explain(SimpleNamespace(**command.report), now, metric=metric, coherent=True)
 
 
 class DecelerationMonitor:
@@ -139,3 +165,32 @@ class DecelerationMonitor:
     if plan is None or plan.roadConstraint.plannedAt < max(started_time, self.control_barrier):
       return WAITING
     return explain(plan.roadConstraint, now, metric=metric)
+
+
+class ControlDecelerationMonitor(DecelerationMonitor):
+  """Opt-in display of actual control consumer feedback, not planner intent."""
+  def update(self, sm, now, *, started_frame, started_time, openpilot_longitudinal, metric=True, driving_active=None):
+    from openpilot.sunnypilot.selfdrive.controls.lib.road_constraints.control_runtime import feedback_command
+    if not math.isfinite(now):
+      return WAITING
+    drive=(started_frame,started_time)
+    if drive!=self.drive:
+      self.__init__();self.drive=drive
+    messages={name:self._message(sm,name,now,started_frame,started_time)
+              for name in ('carControl','carState','controlsState')}
+    cc,cs,controls=(messages[name] for name in ('carControl','carState','controlsState'))
+    if driving_active is False or any(m is None for m in (cc,cs,controls)) or not cs.canValid or openpilot_longitudinal is None:
+      return self._driver_hold(WAITING,now)
+    if not openpilot_longitudinal:
+      return self._driver_hold(DecelerationStatus('stock','속도 보조 꺼짐'),now)
+    if cs.brakePressed or not cc.longActive or str(controls.longControlState)=='off':
+      return self._driver_hold(DecelerationStatus('inactive','속도 보조 해제'),now)
+    if cs.gasPressed or cc.cruiseControl.override:
+      return self._driver_hold(DecelerationStatus('overridden','운전자 속도 조절 중'),now)
+    if self.driver_blocked:
+      self.control_barrier=max(self.control_barrier,*(sm.logMonoTime[n]/1e9 for n in messages))
+      self.driver_blocked=False
+    feedback=controls.roadControl
+    if feedback.planMonoTime/1e9 < max(started_time,self.control_barrier):
+      return WAITING
+    return explain_control_command(feedback_command(feedback,now),now,metric=metric)

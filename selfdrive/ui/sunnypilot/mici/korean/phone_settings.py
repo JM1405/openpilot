@@ -225,6 +225,8 @@ class PhoneSettings:
     if self.mode != HOME_MODE and self.clock() >= session['settings_expires']:
       reason = 'C4에서 설정 변경을 다시 승인해'
       view.update(editable=False, reason=reason)
+      if 'can_restore_default' in view:
+        view.update(can_restore_default=False, blocked_reason=reason)
       for row in view.get('rows', []):
         row.update(editable=False, blocked_reason=reason)
     return view
@@ -335,5 +337,5 @@ class PhoneSettings:
         raise PhoneError('이 연결에서 받은 모델 요청을 찾지 못했어. 현재 모델을 확인해', 'missing', 404)
       receipt = dict(record['receipt'])
       models = self._settings_view(token, self.management.models())
-      applied = receipt.get('outcome') == 'requested' and models['current']['ref'] == receipt.get('ref') and not models['requested']
+      applied = receipt.get('outcome') == 'requested' and models['configured_running'] and models['current']['ref'] == receipt.get('ref') and not models['requested']
       return {'receipt': receipt, 'models': models, 'applied': applied}

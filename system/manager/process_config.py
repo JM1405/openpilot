@@ -9,6 +9,7 @@ from openpilot.system.manager.process import PythonProcess, NativeProcess, Daemo
 from openpilot.system.hardware.hw import Paths
 
 from openpilot.sunnypilot.mapd.mapd_manager import MAPD_PATH
+from openpilot.sunnypilot.selfdrive.controls.lib.road_constraints.process import RoadInputProcess
 
 from openpilot.sunnypilot.models.helpers import get_active_model_runner
 from openpilot.sunnypilot.sunnylink.utils import sunnylink_need_register, sunnylink_ready, use_sunnylink_uploader
@@ -107,6 +108,7 @@ def and_(*fns):
   return lambda *args: operator.and_(*(fn(*args) for fn in fns))
 
 procs = [
+  RoadInputProcess(),
   DaemonProcess("manage_athenad", "system.athena.manage_athenad", "AthenadPid"),
 
   NativeProcess("loggerd", "system/loggerd", ["./loggerd"], logging),
@@ -170,7 +172,7 @@ procs = [
 # sunnypilot
 procs += [
   # Models
-  PythonProcess("models_manager", "sunnypilot.models.manager", only_offroad),
+  PythonProcess("models_manager", "sunnypilot.models.manager", always_run),
   NativeProcess("modeld_tinygrad", "sunnypilot/modeld_v2", ["./modeld"], and_(only_onroad, is_tinygrad_model)),
 
   # Backup

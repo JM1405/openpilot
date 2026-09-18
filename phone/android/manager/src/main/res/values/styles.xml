@@ -1,0 +1,20 @@
+<resources>
+  <style name="PulseTheme" parent="Theme.AppCompat.NoActionBar">
+    <item name="android:fontFamily">sans</item>
+    <item name="colorAccent">#D4ED86</item>
+    <item name="android:colorAccent">#D4ED86</item>
+    <item name="android:windowBackground">#1C2320</item>
+    <item name="android:colorBackground">#1C2320</item>
+    <item name="android:textColorPrimary">#F0F1E8</item>
+    <item name="android:textColorSecondary">#A4B39E</item>
+    <item name="android:windowLightStatusBar">false</item>
+  </style>
+  <style name="KakaoReceiverTheme" parent="Theme.AppCompat.NoActionBar">
+    <item name="colorAccent">#D4ED86</item>
+    <item name="android:windowBackground">#1C2320</item>
+    <item name="android:colorBackground">#1C2320</item>
+    <item name="android:textColorPrimary">#F0F1E8</item>
+    <item name="android:textColorSecondary">#A4B39E</item>
+    <item name="android:windowLightStatusBar">false</item>
+  </style>
+</resources>

@@ -136,7 +136,11 @@ class RoadConstraintPlanner:
     # This cannot refresh an expired timestamp or repair an unconfirmed path.
     age = max(0.0, now - c.observed_at)
     progress = c.progress_m - s.reference_progress_m + max(0.0, v_ego * age - a_ego * age * age / 2)
-    remaining = [event for event in s.constraints if event.end_m >= progress]
+    uncertainty = c.position_error_m if c.motion_estimated else 0.
+    # Brake for the nearest plausible target, but keep it until even the
+    # farthest plausible vehicle position has passed. Do not skip a camera
+    # merely because an estimate's forward error overlaps its target point.
+    remaining = [event for event in s.constraints if event.end_m >= progress-uncertainty]
     if not remaining:
       return self._clear("clear", "", previous_accel, dt)
 
@@ -146,7 +150,7 @@ class RoadConstraintPlanner:
     candidates = []
     any_unreachable = False
     for event in remaining:
-      distance = event.start_m - progress
+      distance = event.start_m - progress - uncertainty
       target = event.target_speed
       available = max(0.0, distance - limits.margin_m - target * limits.margin_seconds)
 

@@ -1,0 +1,19 @@
+pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+dependencyResolutionManagement {
+  repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+  repositories {
+    google(); mavenCentral()
+    maven { url 'https://devrepo.tmapadmin.com/repository/tmap-sdk-release/' }
+    maven {
+      url 'https://devrepo.kakaomobility.com/repository/kakao-mobility-android-knsdk-public/'
+      content { includeGroup 'com.kakaomobility.knsdk'; includeGroup 'com.kakaomobility.location.library' }
+    }
+    maven {
+      url 'https://devrepo.kakaomobility.com/repository/kakao-mobility-android-locationsdk-release/'
+      content { includeGroup 'com.kakaomobility.location.library' }
+    }
+    maven { url 'https://devrepo.kakao.com/nexus/content/groups/public/'; content { includeGroup 'com.kakao.sdk' } }
+  }
+}
+rootProject.name = 'CommaPhone'
+include ':manager'

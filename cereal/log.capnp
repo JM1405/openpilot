@@ -801,6 +801,21 @@ struct SelfdriveState {
 }
 
 struct ControlsState @0x97ff69c53601abf1 {
+  roadControl @67 :RoadControlFeedback;
+
+  struct RoadControlFeedback {
+    version @0 :UInt16;
+    decisionId @1 :Text;
+    planMonoTime @2 :UInt64;
+    aTarget @3 :Float32;
+    shouldStop @4 :Bool;
+    targetUsed @5 :Bool;
+    selected @6 :Bool;
+    validUntil @7 :Float64;
+    report @8 :Custom.LongitudinalPlanSP.RoadConstraint;
+    consumerLimited @9 :Bool; # Recovery ceiling based on the last actually consumed target.
+  }
+
   longitudinalPlanMonoTime @28 :UInt64;
   lateralPlanMonoTime @50 :UInt64;
 
@@ -1157,6 +1172,11 @@ struct LongitudinalPlan @0xe00b5b3eba12876c {
   shouldStop @37: Bool;
   allowThrottle @38: Bool;
   allowBrake @39: Bool;
+  # Optional isolated road-control candidate: command and explanation are one
+  # packet. Legacy publishers leave these empty. No device entry point enables it.
+  roadConstraint @40 :Custom.LongitudinalPlanSP.RoadConstraint;
+  roadDecisionId @41 :Text;
+  roadPlanValidUntil @42 :Float64;
 
 
   solverExecutionTime @35 :Float32;
@@ -1167,6 +1187,7 @@ struct LongitudinalPlan @0xe00b5b3eba12876c {
     lead1 @2;
     lead2 @3;
     e2e @4;
+    road @5;
   }
 
 
@@ -2558,8 +2579,8 @@ struct Event {
     carStateSP @114 :Custom.CarStateSP;
     liveMapDataSP @115 :Custom.LiveMapDataSP;
     modelDataV2SP @116 :Custom.ModelDataV2SP;
-    customReserved10 @136 :Custom.CustomReserved10;
-    customReserved11 @137 :Custom.CustomReserved11;
+    phoneRoadLocationSP @136 :Custom.PhoneRoadLocationSP;
+    roadConstraintsSP @137 :Custom.RoadConstraintsSP;
     customReserved12 @138 :Custom.CustomReserved12;
     customReserved13 @139 :Custom.CustomReserved13;
     customReserved14 @140 :Custom.CustomReserved14;

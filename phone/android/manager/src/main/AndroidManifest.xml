@@ -1,0 +1,28 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <uses-permission android:name="android.permission.INTERNET"/>
+  <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+  <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+  <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+  <uses-permission android:name="android.permission.CAMERA"/>
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+  <uses-permission android:name="android.permission.WAKE_LOCK"/>
+  <uses-feature android:name="android.hardware.camera" android:required="false"/>
+  <uses-feature android:name="android.hardware.camera.autofocus" android:required="false"/>
+  <application android:name=".ManagerApp" android:label="고라니파일럿"
+      android:theme="@style/PulseTheme"
+      android:icon="@drawable/ic_pulse" android:usesCleartextTraffic="false"
+      android:allowBackup="false" android:fullBackupContent="false" android:supportsRtl="true"
+      android:dataExtractionRules="@xml/data_extraction_rules">
+    <service android:name=".ReceptionService" android:exported="false" android:foregroundServiceType="location"/>
+    <activity android:name=".KakaoActivity" android:exported="false"
+        android:theme="@style/KakaoReceiverTheme"/>
+    <activity android:name=".PhoneQrCaptureActivity" android:exported="false"
+        android:theme="@style/zxing_CaptureTheme"/>
+    <activity android:name=".MainActivity" android:exported="true"
+        android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout">
+      <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
+    </activity>
+  </application>
+</manifest>

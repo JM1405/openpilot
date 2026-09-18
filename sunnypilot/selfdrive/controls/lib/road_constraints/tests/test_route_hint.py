@@ -42,20 +42,76 @@ class RouteHintTests(unittest.TestCase):
     a=replace(link(),points=tuple(point(x) for x in range(0,301,5)))
     p=self.provider(a,link('parallel',y=4.))
     self.assertEqual(self.warm(p,self.hint(a.points)).status,'ambiguousRoad')
-  def test_expired_pending_and_reversed_routes_produce_no_input(self):
+  def test_expired_pending_routes_use_current_road_only_and_reversed_route_is_blocked(self):
     a=replace(link(),points=tuple(point(x) for x in range(0,301,5)));p=self.provider(a)
-    for h in (replace(self.hint(a.points),valid_until=9.),RouteHint('pending','phone:2',reason='rerouting'),self.hint(tuple(reversed(a.points)))):
-      self.assertIsNone(self.warm(p,h).road_input)
+    for h in (replace(self.hint(a.points),valid_until=9.),RouteHint('pending','phone:2',reason='rerouting')):
+      p.reset('new-case');result=self.warm(p,h)
+      self.assertTrue(result.route_independent)
+      self.assertEqual([r.road_id for r in result.road_input.context.path],['a'])
+    p.reset('new-case')
+    self.assertIsNone(self.warm(p,self.hint(tuple(reversed(a.points)))).road_input)
   def test_mismatched_route_and_sparse_geometry_withheld(self):
     a=replace(link(),points=tuple(point(x) for x in range(0,301,5)));p=self.provider(a)
     for h in (self.hint(tuple(point(x,30.) for x in range(0,301,5))),self.hint((point(0),point(300)))):
       self.assertIsNone(self.warm(p,h).road_input)
-  def test_route_change_requires_new_warmup(self):
+  def test_route_change_rebuilds_branch_from_independent_current_road(self):
     a,b,straight=self.fork();p=self.provider(a,b,straight);h=self.hint(a.points+b.points[1:]);self.warm(p,h,x=100)
     new=replace(self.hint(a.points+straight.points[1:]),identity='phone:2')
-    self.assertEqual(self.observe(p,fix(104,10.2),new).status,'warmingUp')
-    result=self.observe(p,fix(106,10.3),new)
+    result=self.observe(p,fix(104,10.2),new)
     self.assertEqual([r.road_id for r in result.road_input.context.path],['a','straight'])
+    self.assertFalse(any(c.link.road_id=='bend' for c in result.road_input.snapshot.constraints))
+
+  def test_revalidation_rebuilds_branch_without_manufacturing_a_fix(self):
+    a,b,straight=self.fork();p=self.provider(a,b,straight)
+    old=self.warm(p,self.hint(a.points+b.points[1:]),x=100).road_input
+    original=p.previous_fix
+    new=replace(self.hint(a.points+straight.points[1:]),identity='phone:2')
+    result=p.revalidate_route(now=10.6,today=fixtures.TODAY,route=new).road_input
+    self.assertIs(p.previous_fix,original)
+    self.assertEqual(result.context.observed_at,old.context.observed_at)
+    self.assertEqual(result.snapshot.source_at,old.snapshot.source_at)
+    self.assertEqual(result.snapshot.received_at,old.snapshot.received_at)
+    self.assertEqual([r.road_id for r in result.context.path],['a','straight'])
+    self.assertFalse(any(c.link.road_id=='bend' for c in result.snapshot.constraints))
+
+  def test_pending_tracks_current_road_but_never_supplies_future_branch(self):
+    a,b,straight=self.fork();p=self.provider(a,b,straight)
+    pending=RouteHint('pending','phone:2',reason='rerouting')
+    current=self.warm(p,pending,x=100)
+    self.assertTrue(current.route_independent)
+    self.assertEqual([r.road_id for r in current.road_input.context.path],['a'])
+    self.assertFalse(any(c.kind==RoadKind.CURVE for c in current.road_input.snapshot.constraints))
+    new=self.hint(a.points+straight.points[1:])
+    result=p.revalidate_route(now=10.2,today=fixtures.TODAY,route=new)
+    self.assertEqual([r.road_id for r in result.road_input.context.path],['a','straight'])
+
+  def test_revalidation_requires_two_measured_matches_and_original_deadline(self):
+    a,b,c=self.fork();p=self.provider(a,b,c);h=self.hint(a.points+b.points[1:])
+    self.observe(p,fix(100,10.),h)
+    self.assertIsNone(p.revalidate_route(now=10.1,today=fixtures.TODAY,route=h).road_input)
+    self.observe(p,fix(102,10.1),h)
+    self.assertIsNone(p.revalidate_route(now=11.11,today=fixtures.TODAY,route=h).road_input)
+
+  def test_revalidation_drops_expired_branch_and_rejects_mismatched_route(self):
+    a,b,c=self.fork();p=self.provider(a,b,c);h=self.hint(a.points+b.points[1:])
+    self.warm(p,h,x=100)
+    expired=p.revalidate_route(now=10.2,today=fixtures.TODAY,route=replace(h,valid_until=10.15))
+    self.assertTrue(expired.route_independent)
+    self.assertEqual([r.road_id for r in expired.road_input.context.path],['a'])
+    wrong=replace(h,identity='wrong',points=tuple(point(x,30) for x in range(0,701,5)))
+    self.assertIsNone(p.revalidate_route(now=10.3,today=fixtures.TODAY,route=wrong).road_input)
+    self.assertIsNone(p.revalidate_route(now=10.4,today=fixtures.TODAY,route=h).road_input)
+
+  def test_pending_does_not_follow_even_a_unique_successor(self):
+    a,b,_=self.fork();p=self.provider(a,b)
+    h=self.hint(a.points+b.points[1:]);self.warm(p,h,x=100)
+    result=p.revalidate_route(now=10.2,today=fixtures.TODAY,route=RouteHint('pending','new'))
+    self.assertEqual([r.road_id for r in result.road_input.context.path],['a'])
+    self.assertTrue(all(c.link.road_id=='a' for c in result.road_input.snapshot.constraints))
+
+  def test_pending_does_not_bypass_current_road_ambiguity(self):
+    a,b,c=self.fork();p=self.provider(a,b,c,replace(a,id='parallel',points=tuple(point(x,4) for x in range(0,301,5))))
+    self.assertIsNone(self.warm(p,RouteHint('pending','new'),x=100).road_input)
   def test_both_branch_geometries_matching_route_are_held(self):
     a,b,straight=self.fork();p=self.provider(a,b,replace(b,id='duplicate',end='other'))
     result=self.warm(p,self.hint(a.points+b.points[1:]),x=100)

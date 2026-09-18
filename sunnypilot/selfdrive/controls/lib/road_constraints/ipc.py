@@ -12,7 +12,7 @@ from uuid import uuid4
 
 from cereal import messaging
 from .contract import RoadConstraint, RoadContext, RoadInput, RoadInputValidator, RoadKind, RoadLink, RoadSnapshot
-from .live import FIX_AGE_NS, NS, LiveSample, identifier
+from .live import ANCHOR_AGE_NS, FIX_AGE_NS, NS, LiveSample, identifier
 from .offline import Fix
 from .measurements import parse_measurements
 from .dataset import DatasetInfo
@@ -53,8 +53,10 @@ class LocationPublisher(Publisher):
   def __init__(self, **kwargs):
     super().__init__(LOCATION, **kwargs)
 
-  def publish(self, sample, route=None):
+  def publish(self, sample, route=None, sdk_events=""):
+    if len(sdk_events)>8192:raise IpcError("sdkEventsTooLarge")
     msg, b = self.message()
+    b.sdkEventsJson = sdk_events
     b.routeHintJson = route.wire() if route is not None else ""
     b.sampleRevision, b.generation, b.status = sample.revision, sample.generation, sample.status
     b.hasFix = sample.fix is not None
@@ -71,6 +73,16 @@ class LocationPublisher(Publisher):
         "bearingAccuracyDeg": f.bearing_accuracy_deg or 0.0,
         "observedAt": f.observed_at,
       }
+    if sample.anchor is not None:
+      b.schemaVersion=2
+      b.hasAnchor=True
+      b.anchorUntilNs=sample.anchor_until_ns
+      b.anchorAcceptedNs=sample.anchor_accepted_ns
+      b.anchorUncertaintyNs=sample.anchor_uncertainty_ns
+      f=sample.anchor
+      b.anchor=dict(longitude=f.lon,latitude=f.lat,bearingDeg=f.bearing_deg or 0.,
+        speedMps=f.speed_mps,accuracyM=f.accuracy_m,bearingAccuracyDeg=f.bearing_accuracy_deg or 0.,
+        observedAt=f.observed_at,hasBearing=f.bearing_deg is not None and f.bearing_accuracy_deg is not None)
     self.send(msg)
 
 
@@ -102,6 +114,10 @@ def pack_road(road):
       "progressM": c.progress_m,
       "observedAt": c.observed_at,
       "confirmed": c.confirmed,
+      "motionEstimated": c.motion_estimated,
+      "gpsObservedAt": c.gps_observed_at,
+      "gpsUncertaintyS": c.gps_uncertainty_s,
+      "positionErrorM": c.position_error_m,
     },
   }
 
@@ -119,7 +135,7 @@ def unpack_road(b):
   constraints = tuple(RoadConstraint(e.eventId, RoadKind(e.kind), link(e.link), e.startM, e.endM, e.targetSpeed) for e in s.constraints)
   return RoadInput(
     RoadSnapshot(s.source, s.session, s.pathVersion, s.sequence, s.sourceAt if s.hasSourceAt else None, s.receivedAt, s.referenceProgressM, constraints),
-    RoadContext(c.session, c.pathVersion, tuple(link(v) for v in c.path), c.progressM, c.observedAt, c.confirmed),
+    RoadContext(c.session, c.pathVersion, tuple(link(v) for v in c.path), c.progressM, c.observedAt, c.confirmed, c.motionEstimated, c.gpsObservedAt, c.gpsUncertaintyS, c.positionErrorM),
   )
 
 
@@ -134,6 +150,8 @@ class RoadPublisher(Publisher):
       b.dataset = dataset.wire()
     if road is not None:
       b.validUntilNs, b.input = deadline, pack_road(road)
+      if road.context.motion_estimated:
+        b.schemaVersion=2  # Older consumers must not ignore motion provenance.
     self.send(msg)
 
 
@@ -147,7 +165,7 @@ class EnvelopeGuard:
     if at < self.last_poll:
       raise IpcError("consumerClockJump")
     self.last_poll = at
-    if not msg.valid or b.schemaVersion != 1:
+    if not msg.valid or b.schemaVersion not in (1,2):
       raise IpcError("invalidEnvelope")
     identifier(b.publisherEpoch)
     # The planner captures now just before polling; a concurrent publisher can
@@ -197,10 +215,12 @@ class LocationReader(Reader):
     self.remote = None
     self.route_hint = RouteHint()
     self.revision = self.generation = 0
+    self.sdk_events = None
     self.latest = LiveSample(0, 0, "awaitingPublisher")
     self.invalid = True
 
   def clear(self, reason):
+    self.sdk_events = None
     self.route_hint = RouteHint("pending", self.route_hint.identity, reason=reason)
     if not self.invalid or self.latest.status != reason:
       self.revision += 1
@@ -212,6 +232,21 @@ class LocationReader(Reader):
     if len(b.status) > 128:
       raise IpcError("invalidStatus")
     hint = RouteHint.parse(b.routeHintJson, now)
+    anchor = None
+    if b.hasAnchor:
+      if b.schemaVersion!=2:
+        raise IpcError('anchorSchemaRequired')
+      f=b.anchor
+      values=parse_measurements((f.longitude,f.latitude,f.bearingDeg if f.hasBearing else None,
+        f.speedMps,f.accuracyM,f.bearingAccuracyDeg if f.hasBearing else None))
+      low=round(f.observedAt*NS)-b.anchorUncertaintyNs
+      if (not 0<=f.observedAt<=now or not 0<=b.anchorUncertaintyNs<=52_000_000
+          or not low<=b.anchorAcceptedNs<=low+FIX_AGE_NS
+          or b.anchorAcceptedNs>now*NS or not now*NS<b.anchorUntilNs<=low+ANCHOR_AGE_NS+2):
+        raise IpcError('invalidAnchorDeadline')
+      anchor=Fix(*values,f.observedAt)
+    elif b.anchorUntilNs or b.anchorAcceptedNs or b.anchorUncertaintyNs:
+      raise IpcError('unexpectedAnchorProvenance')
     fix = None
     if b.hasFix:
       f = b.fix
@@ -221,10 +256,13 @@ class LocationReader(Reader):
       observed = f.observedAt
       if not 0 <= observed <= now:
         raise IpcError("uncertainFix")
-      if not (0 <= b.uncertaintyNs <= 52_000_000 and now * NS < b.validUntilNs <= round(observed * NS) - b.uncertaintyNs + FIX_AGE_NS + 2):
+      if not (0 <= b.uncertaintyNs <= 52_000_000 and (anchor is not None or now * NS < b.validUntilNs) and 0 < b.validUntilNs <= round(observed * NS) - b.uncertaintyNs + FIX_AGE_NS + 2):
         raise IpcError("invalidFixDeadline")
       fix = Fix(*values, observed)
-    remote = LiveSample(b.sampleRevision, b.generation, b.status, fix, b.validUntilNs, b.uncertaintyNs)
+    if anchor is not None and fix is not None and (fix!=anchor or b.uncertaintyNs!=b.anchorUncertaintyNs):
+      raise IpcError('anchorFixMismatch')
+    remote = LiveSample(b.sampleRevision, b.generation, b.status, fix, b.validUntilNs, b.uncertaintyNs,
+      anchor,b.anchorUntilNs,b.anchorAcceptedNs,b.anchorUncertaintyNs)
     if not changed and self.remote is not None:
       if (
         remote.revision < self.remote.revision
@@ -238,6 +276,8 @@ class LocationReader(Reader):
       self.revision += 1
       self.latest = replace(remote, revision=self.revision, generation=self.generation)
     self.remote, self.invalid = remote, False
+    from .sdk_events import parse
+    self.sdk_events = parse(b.sdkEventsJson,now)
     self.route_hint = hint
     return self.latest
 
@@ -250,8 +290,14 @@ class LocationReader(Reader):
       self.guard.last_poll = int(now * NS)
       if now * NS - self.guard.stamp > LEASE_NS:
         self.clear("publisherLost")
+      elif self.latest.anchor is not None and now*NS >= self.latest.anchor_until_ns:
+        self.clear("anchorExpired")
       elif self.latest.fix is not None and now * NS >= self.latest.valid_until_ns:
-        self.clear("inputExpired")
+        if self.latest.anchor is None:
+          self.clear("inputExpired")
+        else:
+          self.revision+=1
+          self.latest=replace(self.latest,revision=self.revision,status='awaitingNextFix',fix=None,valid_until_ns=0,uncertainty_ns=0)
     except Exception:
       self.clear("invalidLocationIpc")
     return self.latest
@@ -259,6 +305,11 @@ class LocationReader(Reader):
   @property
   def deadline(self):
     return min(self.latest.valid_until_ns, self.guard.stamp + LEASE_NS)
+
+
+  @property
+  def anchor_deadline(self):
+    return min(self.latest.anchor_until_ns,self.guard.stamp+LEASE_NS)
 
 
 class RoadReader(Reader):
@@ -292,9 +343,17 @@ class RoadReader(Reader):
       error = self.validator.validate(road, now)
       if error:
         raise IpcError(error)
-      if dataset.state == 'ready' and road.snapshot.source != 'offline-derived:' + dataset.dataset_id:
+      base_source = 'offline-derived:' + dataset.dataset_id
+      if dataset.state == 'ready' and road.snapshot.source not in (base_source, base_source + '+kakao'):
         raise IpcError('datasetSourceMismatch')
-      if not now * NS < b.validUntilNs <= round(road.context.observed_at * NS) + FIX_AGE_NS + 2:
+      context=road.context
+      limit=round(context.observed_at*NS)+FIX_AGE_NS+2
+      if context.motion_estimated:
+        if b.schemaVersion!=2:
+          raise IpcError('motionSchemaRequired')
+        limit=min(round(context.observed_at*NS)+LEASE_NS,
+          round((context.gps_observed_at-context.gps_uncertainty_s)*NS)+ANCHOR_AGE_NS)
+      if not now * NS < b.validUntilNs <= limit:
         raise IpcError("invalidRoadDeadline")
     self.road, self.deadline, self.status = road, b.validUntilNs, b.status
     self.dataset = dataset

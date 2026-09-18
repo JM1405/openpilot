@@ -1,0 +1,14 @@
+{
+  "candidate": "D293",
+  "apk": "koranipilot-manager-v0.21-model-selection.apk",
+  "apk_sha256": "4082fa9712e10183abdad5901b7cf09b448f93302a71188151119301649e4072",
+  "phone_server_tests": 124,
+  "road_regression_tests": 217,
+  "jvm_tests": 66,
+  "c4_native_build_returncode": 0,
+  "c4_native_build_seconds": 80.56,
+  "c4_model_transaction_tests": 17,
+  "android_model_ui_checks": 13,
+  "real_vehicle_model_switch_verified": false,
+  "active_c4_install_changed": false
+}

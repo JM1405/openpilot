@@ -17,7 +17,7 @@ from openpilot.selfdrive.ui.sunnypilot.mici.korean.road_status import RoadStatus
 from openpilot.selfdrive.ui.sunnypilot.mici.korean.settings import SettingsController, observed
 
 SERVICES = ('carState', 'carControl', 'selfdriveState', 'selfdriveStateSP', 'carParams', 'carParamsSP', 'longitudinalPlanSP',
-            'deviceState', 'modelManagerSP', 'pandaStates')
+            'deviceState', 'modelManagerSP', 'modelDataV2SP', 'pandaStates')
 
 
 class UnavailableRoadInput:
@@ -91,9 +91,9 @@ class RuntimeInputs:
       started_frame = self.started_frame
     now = self.clock()
     result = {}
-    for name in ('deviceState', 'modelManagerSP'):
+    for name in ('deviceState', 'modelManagerSP', 'modelDataV2SP'):
       if (snapshot.seen.get(name) and snapshot.valid.get(name) and snapshot.recv_frame.get(name, -1) >= started_frame and
-          -.01 <= now - snapshot.recv_time.get(name, 0.) <= (2.5 if name == 'modelManagerSP' else 1.5)):
+          -.01 <= now - snapshot.recv_time.get(name, 0.) <= (2.5 if name == 'modelManagerSP' else .5 if name == 'modelDataV2SP' else 1.5)):
         result[name] = snapshot.messages.get(name)
     if (snapshot.seen.get('carParams') and snapshot.valid.get('carParams') and
         snapshot.recv_frame.get('carParams', -1) >= started_frame):
@@ -135,9 +135,12 @@ class PhoneRuntime:
     self.network_error = ''
     self.address_provider = address_provider
     self.closed = False
+    self._address_retry_until = clock() + 60.
+    self._address_retry_at = 0.
+    self._address_retry_pending = False
 
   def retry_local_transport(self):
-    """Explicit retry after Wi-Fi becomes available; no pairing or Params writes."""
+    """Start configured local TLS only; never pair, approve, or write Params."""
     if self.closed or self.transport is not None:
       return False
     import os
@@ -149,8 +152,11 @@ class PhoneRuntime:
       self.attach(local_phone_transport(self.service, port=int(os.getenv('KOREAN_PHONE_PORT', '7443')),
                                         address_provider=self.address_provider))
       self.network_error = ''
+      self._address_retry_pending = False
       return True
     except (OSError, ValueError, ImportError) as exc:
+      self._address_retry_pending = getattr(exc, 'stage', '') == 'address'
+      self._address_retry_at = self.inputs.clock() + 2.
       self.network_error = getattr(exc, 'display', '연결 준비 실패\n' + type(exc).__name__)
       return False
 
@@ -162,6 +168,13 @@ class PhoneRuntime:
         self.inputs.capture(sm, started_frame, release)
         self.service._expire()
         self.service.road_status.update()
+    # NetworkManager initializes asynchronously. Only retry an initial address
+    # failure, at most once every two seconds for the first minute. Other errors
+    # and later network changes retain explicit device retry; sessions stay empty.
+    now = self.inputs.clock()
+    if (not self.closed and self._address_retry_pending and
+        self._address_retry_at <= now < self._address_retry_until):
+      self.retry_local_transport()
 
   def home_check(self):
     if self.closed or self.road_publisher is not None:

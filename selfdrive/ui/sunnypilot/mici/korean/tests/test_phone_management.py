@@ -41,7 +41,7 @@ class Message:
 class SM:
   def __init__(self, now):
     self.services = {'carState', 'carControl', 'selfdriveState', 'selfdriveStateSP', 'carParams',
-                     'longitudinalPlanSP', 'deviceState', 'modelManagerSP'}
+                     'longitudinalPlanSP', 'deviceState', 'modelManagerSP', 'modelDataV2SP'}
     self.seen = dict.fromkeys(self.services, False)
     self.valid = dict.fromkeys(self.services, False)
     self.recv_frame = dict.fromkeys(self.services, -1)
@@ -55,6 +55,7 @@ class SM:
       'carParams': {'brand': 'hyundai', 'alphaLongitudinalAvailable': True, 'openpilotLongitudinalControl': False},
       'longitudinalPlanSP': {'dec': {'active': False, 'state': 'acc'}},
       'deviceState': {'deviceType': 'mici'},
+      'modelDataV2SP': {'modelIdentityKnown': False},
       'modelManagerSP': {'activeBundle': {}, 'selectedBundle': {}, 'availableBundles': [
         {'ref': 'model/test', 'index': 7, 'displayName': '테스트 모델', 'generation': 10,
          'status': 'notDownloading', 'models': []},
@@ -95,7 +96,7 @@ class PhoneManagementTest(unittest.TestCase):
     self.assertTrue(rows['owner']['supported'])
     self.assertFalse(rows['owner']['editable'])  # release candidate keeps cruise owner fixed
     self.assertTrue(rows['mads']['editable'])
-    self.assertEqual(view['models']['current']['name'], 'CD210 (기본)')
+    self.assertEqual(view['models']['configured']['name'], 'CD210 (기본)')
     self.assertTrue(view['models']['baseline_fixed'])
     self.assertFalse(view['models']['editable'])
     self.assertEqual(self.runtime.service.view(token)['revision'], view['settings']['revision'])
@@ -186,7 +187,69 @@ class PhoneManagementTest(unittest.TestCase):
       'displayName': '테스트 모델', 'generation': 10, 'status': 'downloaded', 'models': []},
       'selectedBundle': {}, 'availableBundles': self.sm.data['modelManagerSP']['availableBundles']}, self.now)
     runtime.update(self.sm, 10, False)
+    self.assertFalse(service.model_result(token, request['request_id'])['applied'])
+    from openpilot.sunnypilot.models.selection import bundle_signature
+    signature = bundle_signature(self.sm.data['modelManagerSP']['activeBundle'])
+    self.sm.feed('modelDataV2SP', {'modelIdentityKnown': True, 'modelRef': 'model/test',
+      'modelName': '테스트 모델', 'modelSignature': signature}, self.now)
+    runtime.update(self.sm, 10, False)
     self.assertTrue(service.model_result(token, request['request_id'])['applied'])
+    self.now += .6
+    self.assertFalse(service.model_result(token, request['request_id'])['applied'])
+
+  def model_runtime(self):
+    runtime = PhoneRuntime(self.store, clock=lambda: self.now, allow_model_change=True)
+    self.addCleanup(runtime.close)
+    runtime.update(self.sm, 10, False)
+    service = runtime.service
+    ticket = service.pair(service.device_open()['window']['code'], 'Android')
+    service.device_decide(service.pending['id'], True)
+    state, token = service.status(ticket)
+    return runtime, token, state['csrf']
+
+  def test_model_default_restore_cancels_pending_download(self):
+    runtime, token, csrf = self.model_runtime()
+    service = runtime.service
+    request = {'request_id': 'model-start-000001', 'ref': 'model/test',
+      'revision': service.management.models()['revision'], 'acknowledged': True}
+    self.assertEqual(service.model_change(token, csrf, request)['outcome'], 'requested')
+    view = service.management.models()
+    self.assertFalse(view['editable'])
+    self.assertTrue(view['can_restore_default'])
+    result = service.model_change(token, csrf, {'request_id': 'model-cancel-00001', 'ref': '',
+      'revision': view['revision'], 'acknowledged': True})
+    self.assertEqual(result['outcome'], 'requested')
+    self.assertIsNone(self.store.get('ModelManager_DownloadIndex'))
+    self.assertIsNone(self.store.get('KoranipilotModelRequest'))
+    self.assertFalse(service.model_result(token, 'model-cancel-00001')['applied'])
+
+  def test_catalogue_revision_rejects_changed_artifact_identity(self):
+    runtime, token, csrf = self.model_runtime()
+    revision = runtime.service.management.models()['revision']
+    self.sm.data['modelManagerSP']['availableBundles'][0]['generation'] = 99
+    runtime.update(self.sm, 10, False)
+    receipt = runtime.service.model_change(token, csrf, {'request_id': 'model-conflict-001', 'ref': 'model/test',
+      'revision': revision, 'acknowledged': True})
+    self.assertEqual(receipt['code'], 'conflict')
+    self.assertIsNone(self.store.get('ModelManager_DownloadIndex'))
+
+  def test_permission_expiry_disables_default_restore_too(self):
+    runtime, token, csrf = self.model_runtime()
+    from openpilot.selfdrive.ui.sunnypilot.mici.korean.phone_settings import digest
+    runtime.service.sessions[digest(token)]['settings_expires'] = self.now - 1
+    view = runtime.service.overview(token)['models']
+    self.assertFalse(view['editable'])
+    self.assertFalse(view['can_restore_default'])
+    self.assertIn('다시 승인', view['blocked_reason'])
+
+  def test_same_ref_different_loaded_artifact_is_not_applied(self):
+    runtime, token, csrf = self.model_runtime()
+    self.sm.data['modelManagerSP']['activeBundle'] = self.sm.data['modelManagerSP']['availableBundles'][0]
+    self.sm.feed('modelDataV2SP', {'modelIdentityKnown': True, 'modelRef': 'model/test',
+      'modelName': 'Old same-ref model', 'modelSignature': 'different'}, self.now)
+    runtime.update(self.sm, 10, False)
+    self.assertTrue(runtime.service.management.models()['running_confirmed'])
+    self.assertFalse(runtime.service.management.models()['configured_running'])
 
 
 class HttpsOverviewTest(unittest.TestCase):
