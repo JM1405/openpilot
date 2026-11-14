@@ -1,0 +1,37 @@
+plugins {
+  id 'com.android.application'
+}
+
+android {
+  namespace 'dev.koranipilot.manager'
+  compileSdk 36
+
+  defaultConfig {
+    applicationId 'dev.koranipilot.manager'
+    minSdk 26
+    targetSdk 36
+    versionCode 200
+    versionName '2.0.0'
+    ndk {
+      abiFilters 'arm64-v8a'
+    }
+  }
+
+  compileOptions {
+    sourceCompatibility JavaVersion.VERSION_11
+    targetCompatibility JavaVersion.VERSION_11
+  }
+
+  // KNNaviView internally inflates a ViewBinding layout.
+  buildFeatures {
+    viewBinding true
+  }
+}
+
+dependencies {
+  implementation 'com.kakaomobility.knsdk:knsdk_ui:1.12.8-hotfix03'
+  implementation 'androidx.appcompat:appcompat:1.6.1'
+  implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+  testImplementation 'junit:junit:4.13.2'
+  testImplementation 'org.json:json:20240303'
+}

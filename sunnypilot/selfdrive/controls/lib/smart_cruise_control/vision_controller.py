@@ -12,7 +12,18 @@ from openpilot.common.params import Params
 from openpilot.common.realtime import DT_MDL
 from openpilot.selfdrive.car.cruise import V_CRUISE_UNSET
 from openpilot.sunnypilot import PARAMS_UPDATE_PERIOD
+from openpilot.sunnypilot.koranipilot.config import load_config
 from openpilot.sunnypilot.selfdrive.controls.lib.smart_cruise_control import MIN_V
+
+
+def _read_corner_scale() -> float:
+  try:
+    cfg = load_config()
+    if not cfg.get("enabled", True):
+      return 1.0
+    return max(0.7, min(1.6, float(cfg.get("corner_vision_scale", 1.15))))
+  except Exception:
+    return 1.0
 
 VisionState = custom.LongitudinalPlanSP.SmartCruiseControl.VisionState
 
@@ -65,6 +76,7 @@ class SmartCruiseControlVision:
     self.state = VisionState.disabled
     self.current_lat_acc = 0.
     self.max_pred_lat_acc = 0.
+    self.korani_corner_scale = _read_corner_scale()
 
   def get_a_target_from_control(self) -> float:
     return self.a_target
@@ -78,6 +90,7 @@ class SmartCruiseControlVision:
   def _update_params(self) -> None:
     if self.frame % int(PARAMS_UPDATE_PERIOD / DT_MDL) == 0:
       self.enabled = self.params.get_bool("SmartCruiseControlVision")
+      self.korani_corner_scale = _read_corner_scale()
 
   def _update_calculations(self, sm: messaging.SubMaster) -> None:
     if not self.long_enabled:
@@ -94,10 +107,11 @@ class SmartCruiseControlVision:
 
       # get the maximum curve based on the current velocity
       v_ego = max(self.v_ego, 0.1)  # ensure a value greater than 0 for calculations
-      max_curve = self.max_pred_lat_acc / (v_ego**2)
+      max_curve = max(self.max_pred_lat_acc / (v_ego**2), 1e-6)
 
-      # Get the target velocity for the maximum curve
-      self.v_target = (_A_LAT_REG_MAX / max_curve) ** 0.5
+      # Get the target velocity for the maximum curve, scaled by Koranipilot corner sensitivity
+      a_lat_max = _A_LAT_REG_MAX / self.korani_corner_scale
+      self.v_target = (a_lat_max / max_curve) ** 0.5
 
   def _update_state_machine(self) -> tuple[bool, bool]:
     # ENABLED, ENTERING, TURNING, LEAVING, OVERRIDING
@@ -109,13 +123,15 @@ class SmartCruiseControlVision:
         self.state = VisionState.overriding
 
       else:
+        entering_th = _ENTERING_PRED_LAT_ACC_TH / self.korani_corner_scale
+        abort_th = _ABORT_ENTERING_PRED_LAT_ACC_TH / self.korani_corner_scale
         # ENABLED
         if self.state == VisionState.enabled:
           # Do not enter a turn control cycle if the speed is low.
           if self.v_ego <= MIN_V:
             pass
           # If significant lateral acceleration is predicted ahead, then move to Entering turn state.
-          elif self.max_pred_lat_acc >= _ENTERING_PRED_LAT_ACC_TH:
+          elif self.max_pred_lat_acc >= entering_th:
             self.state = VisionState.entering
 
         # OVERRIDING
@@ -129,7 +145,7 @@ class SmartCruiseControlVision:
           if self.current_lat_acc >= _TURNING_LAT_ACC_TH:
             self.state = VisionState.turning
           # Abort if the predicted lateral acceleration drops
-          elif self.max_pred_lat_acc < _ABORT_ENTERING_PRED_LAT_ACC_TH:
+          elif self.max_pred_lat_acc < abort_th:
             self.state = VisionState.enabled
 
         # TURNING

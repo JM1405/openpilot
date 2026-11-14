@@ -1,0 +1,9 @@
+{
+  "source": "https://github.com/google/fonts/tree/main/ofl/notosanskr",
+  "source_sha256": "194018e6b2b293a7964f037b25c0249ce1418bc9ab3c971060a03aa57861e252",
+  "output_sha256": "ee1dd106a15531cb555b1303fde6fbcf4ba6e72b3b28226ea2f741c6bd406cfa",
+  "weight": 600,
+  "subset": "ASCII, general punctuation, Hangul syllables and compatibility jamo",
+  "family": "C4 Alert Sans",
+  "license": "OFL.txt"
+}

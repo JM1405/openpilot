@@ -11,6 +11,7 @@ from openpilot.selfdrive.ui.mici.widgets.button import BigCircleButton
 from openpilot.selfdrive.ui.mici.widgets.dialog import BigConfirmationDialog, BigDialog
 from openpilot.selfdrive.ui.sunnypilot.mici.layouts.sunnylink import SunnylinkLayoutMici
 from openpilot.selfdrive.ui.sunnypilot.mici.layouts.models import ModelsLayoutMici
+from openpilot.selfdrive.ui.sunnypilot.mici.korani_ui import KoraniQrPage
 from openpilot.selfdrive.ui.ui_state import ui_state
 from openpilot.system.ui.lib.application import gui_app
 from openpilot.system.ui.lib.multilang import tr
@@ -31,6 +32,10 @@ class SettingsLayoutSP(OP.SettingsLayout):
     self.icon_offroad_disable = gui_app.texture("../../sunnypilot/selfdrive/assets/icons_mici/disable_offroad.png", BIG_ICON_SIZE,
                                                 BIG_ICON_SIZE)
     self.icon_offroad_slider = gui_app.texture("icons_mici/settings/device/lkas.png", BIG_ICON_SIZE, BIG_ICON_SIZE)
+
+    korani_qr_panel = KoraniQrPage()
+    korani_qr_btn = SettingsBigButton("korani qr", "web :7000", gui_app.texture("icons_mici/settings/network/wifi_strength_full.png", 64, 48))
+    korani_qr_btn.set_click_callback(lambda: gui_app.push_widget(korani_qr_panel))
 
     sunnylink_panel = SunnylinkLayoutMici(back_callback=gui_app.pop_widget)
     sunnylink_btn = SettingsBigButton(tr("sunnylink"), "", gui_app.texture("icons_mici/settings/developer/ssh.png", 55, 55))
@@ -56,8 +61,9 @@ class SettingsLayoutSP(OP.SettingsLayout):
 
     items = self._scroller._items.copy()
 
-    items.insert(1, sunnylink_btn)
-    items.insert(2, models_btn)
+    items.insert(1, korani_qr_btn)
+    items.insert(2, sunnylink_btn)
+    items.insert(3, models_btn)
 
     # front slots (only one ever visible at a time): exit-always-offroad, then enable-onroad
     items.insert(0, self._enable_offroad_btn_onroad)

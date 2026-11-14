@@ -1,74 +1,66 @@
-![](https://user-images.githubusercontent.com/47793918/233812617-beab2e71-57b9-479e-8bff-c3931347ca40.png)
+# 고라니파일럿 2.0 (Koranipilot 2.0)
 
-## 🌞 What is sunnypilot?
-[sunnypilot](https://github.com/sunnyhaibin/sunnypilot) is a fork of comma.ai's openpilot, an open source driver assistance system. sunnypilot offers the user a unique driving experience for over 300+ supported car makes and models with modified behaviors of driving assist engagements. sunnypilot complies with comma.ai's safety rules as accurately as possible.
+**써니파일럿(sunnypilot C4) 순정 뼈대** 위에 **당근웹 스타일 한글 폰 리모컨**과 **안드로이드 카카오내비 기반 방지턱 · 코너 · 단속카메라 감속**을 가볍게 얹은 콤마4(Comma 4) 전용 프로젝트입니다.
 
-## 💭 Join our Community Forum
-Join the official sunnypilot community forum to stay up to date with all the latest features and be a part of shaping the future of sunnypilot!
-* https://community.sunnypilot.ai/
+---
 
-## Documentation
-https://docs.sunnypilot.ai/ is your one stop shop for everything from features to installation to FAQ about the sunnypilot
+## 1. 무엇이 달라졌나요?
 
-## 🚘 Running on a dedicated device in a car
-First, check out this list of items you'll need to [get started](https://community.sunnypilot.ai/t/getting-started-using-sunnypilot-in-your-supported-car/251).
+- **순정 써니파일럿 뼈대 유지**: 콤마4에서 바로 켜지고 업데이트되는 검증된 C4 빌드(`sunnypilot v2026.002.002`)를 그대로 씁니다.
+- **폰으로 보는 초간단 한글 웹 리모컨 (`:7000`)**:
+  - 콤마4 설정에서 **korani qr**을 누르고 폰 카메라로 QR을 찍기만 하면, 별도 앱이나 복잡한 연결 없이 폰 웹브라우저로 바로 열립니다.
+  - 써니파일럿 74개 주요 설정 한글 조절, 주행 모델 변경, 방지턱·코너·카메라 미세 조정을 한 화면에서 할 수 있습니다.
+- **방지턱 & 코너 우선 감속**:
+  - **과속방지턱 감속**: 카카오내비에서 방지턱 좌표를 받아, 방지턱 앞에서 미리 부드럽게 목표 속도(기본 `25 km/h`)까지 줄입니다.
+  - **코너(커브) 감속**: 써니의 비전 코너 감속 민감도(`corner_vision_scale`)를 조절할 수 있고, 카카오내비 급커브 구간 감속도 함께 동작합니다.
+  - **과속 · 구간단속 감속**: 단속 카메라/구간단속 여유 속도(`+offset`)를 지원합니다.
+  - **안전운전 모드 바로 지원**: 목적지를 찍지 않고 **[주행 연동 시작]**만 눌러도 내비 켜둔 채 방지턱 · 커브 · 카메라를 바로 감지합니다.
 
-## Installation
-Next, refer to the sunnypilot community forum for [installation instructions](https://community.sunnypilot.ai/t/read-before-installing-sunnypilot/254), as well as a complete list of [Recommended Branch Installations](https://community.sunnypilot.ai/t/recommended-branch-installations/235).
+---
 
-## 🎆 Pull Requests
-We welcome both pull requests and issues on GitHub. Bug fixes are encouraged.
+## 2. 콤마4(C4)에 설치하기
 
-Pull requests should be against the most current `master` branch.
+콤마4 설치 화면(Custom Software URL)에 아래 주소를 입력하세요:
 
-## 📊 User Data
+```text
+installer.comma.ai/JM1405
+```
 
-By default, sunnypilot uploads the driving data to comma servers. You can also access your data through [comma connect](https://connect.comma.ai/).
+*(기본 브랜치 `koranipilot`이 자동으로 설치됩니다.)*
 
-sunnypilot is open source software. The user is free to disable data collection if they wish to do so.
+---
 
-sunnypilot logs the road-facing camera, CAN, GPS, IMU, magnetometer, thermal sensors, crashes, and operating system logs.
-The driver-facing camera and microphone are only logged if you explicitly opt-in in settings.
+## 3. 폰으로 한글 설정하기 (웹 리모컨)
 
-By using this software, you understand that use of this software or its related services will generate certain types of user data, which may be logged and stored at the sole discretion of comma. By accepting this agreement, you grant an irrevocable, perpetual, worldwide right to comma for the use of this data.
+1. 콤마4와 스마트폰을 **같은 Wi-Fi 또는 폰 핫스팟**으로 연결하세요.
+2. 콤마4 화면에서 **설정(톱니바퀴) → `korani qr`** 버튼을 누르세요.
+3. 폰 기본 카메라로 화면 오른쪽 **QR 코드**를 비추고 뜨는 주소를 누르세요.
+4. 맨 위 초록 버튼 **`고라니 추천 세팅 한 번에 켜기`**를 누르면 기본 세팅이 완료됩니다!
 
-## Licensing
+---
 
-sunnypilot is released under the [MIT License](LICENSE). This repository includes original work as well as significant portions of code derived from [openpilot by comma.ai](https://github.com/commaai/openpilot), which is also released under the MIT license with additional disclaimers.
+## 4. 안드로이드 내비 연동 앱 설치 & 사용법 (방지턱 · 커브 · 단속)
 
-The original openpilot license notice, including comma.ai’s indemnification and alpha software disclaimer, is reproduced below as required:
+1. 안드로이드 폰에서 아래 링크로 APK를 받아 설치하세요:
+   - 👉 [고라니파일럿 내비 앱(APK) 다운로드](https://github.com/JM1405/openpilot/releases/download/latest-apk/koranipilot-companion.apk)
+   *(또는 3번 QR 웹 리모컨 화면 안의 `안드로이드 앱(APK) 받기` 버튼으로도 받을 수 있어요.)*
+2. **최초 1회만** [카카오 디벨로퍼스](https://developers.kakao.com/)에서 내 앱을 만들고 **Android 플랫폼**에 앱 화면의 **`패키지명 복사`**, **`키 해시 복사`** 버튼을 눌러 붙여넣은 뒤, **네이티브 앱 키(32자리)**를 입력하고 저장하세요.
+   *(한 번 저장하면 다음 주행부터는 다시 입력할 필요가 없어요.)*
+3. 차에 타면 폰 핫스팟으로 콤마4를 연결한 뒤, 앱을 열고 **`주행 연동 시작 ▶`**만 누르세요!
+   - C4와 같은 네트워크에 있으면 자동으로 연결되며, 안 되면 웹 리모컨의 **`폰 내비 앱 자동 연결`** 버튼 한 번으로 연결됩니다.
 
-> openpilot is released under the MIT license. Some parts of the software are released under other licenses as specified.
->
-> Any user of this software shall indemnify and hold harmless Comma.ai, Inc. and its directors, officers, employees, agents, stockholders, affiliates, subcontractors and customers from and against all allegations, claims, actions, suits, demands, damages, liabilities, obligations, losses, settlements, judgments, costs and expenses (including without limitation attorneys’ fees and costs) which arise out of, relate to or result from any use of this software by user.
->
-> **THIS IS ALPHA QUALITY SOFTWARE FOR RESEARCH PURPOSES ONLY. THIS IS NOT A PRODUCT.
-> YOU ARE RESPONSIBLE FOR COMPLYING WITH LOCAL LAWS AND REGULATIONS.
-> NO WARRANTY EXPRESSED OR IMPLIED.**
+---
 
-For full license terms, please see the [`LICENSE`](LICENSE) file.
+## 구버전(v1) 보관 안내
 
-## 💰 Support sunnypilot
-If you find any of the features useful, consider becoming a [sponsor on GitHub](https://github.com/sponsors/sunnyhaibin) to support future feature development and improvements.
+기존 1세대 작업 내역은 안전하게 Git 태그로 보관되어 있습니다:
+- `archive/v1-koranipilot-b0`
+- `archive/v1-koranipilot-b1-home`
+- `archive/v1-koranipilot-dev`
 
+---
 
-By becoming a sponsor, you will gain access to exclusive content, early access to new features, and the opportunity to directly influence the project's development.
+## License
 
-
-<h3>GitHub Sponsor</h3>
-
-<a href="https://github.com/sponsors/sunnyhaibin">
-  <img src="https://user-images.githubusercontent.com/47793918/244135584-9800acbd-69fd-4b2b-bec9-e5fa2d85c817.png" alt="Become a Sponsor" width="300" style="max-width: 100%; height: auto;">
-</a>
-<br>
-
-<h3>PayPal</h3>
-
-<a href="https://paypal.me/sunnyhaibin0850" target="_blank">
-<img src="https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif" alt="PayPal this" title="PayPal - The safer, easier way to pay online!" border="0" />
-</a>
-<br></br>
-
-Your continuous love and support are greatly appreciated! Enjoy 🥰
-
-<span>-</span> Jason, Founder of sunnypilot
+Based on [sunnypilot](https://github.com/sunnyhaibin/sunnypilot) and [openpilot by comma.ai](https://github.com/commaai/openpilot) (MIT License).
+THIS IS ALPHA QUALITY SOFTWARE FOR RESEARCH PURPOSES ONLY. Always keep your hands on the wheel and pay attention to the road.

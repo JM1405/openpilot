@@ -1,0 +1,11 @@
+<resources>
+  <style name="KoraniTheme" parent="Theme.AppCompat.NoActionBar">
+    <item name="colorAccent">#5CE0A8</item>
+    <item name="android:colorAccent">#5CE0A8</item>
+    <item name="android:windowBackground">#0D1412</item>
+    <item name="android:colorBackground">#0D1412</item>
+    <item name="android:textColorPrimary">#F2F6F4</item>
+    <item name="android:textColorSecondary">#9CB2A8</item>
+    <item name="android:windowLightStatusBar">false</item>
+  </style>
+</resources>

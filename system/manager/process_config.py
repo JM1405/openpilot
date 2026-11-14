@@ -182,6 +182,9 @@ procs += [
 
   # locationd
   NativeProcess("locationd_llk", "sunnypilot/selfdrive/locationd", ["./locationd"], only_onroad),
+
+  # Koranipilot web remote + companion receiver
+  PythonProcess("koranipilot_server", "sunnypilot.koranipilot.server", always_run),
 ]
 
 if os.path.exists("./github_runner.sh"):

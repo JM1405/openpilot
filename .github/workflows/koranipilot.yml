@@ -1,0 +1,90 @@
+name: Koranipilot 2.0 CI & Companion APK
+
+on:
+  push:
+    branches: [koranipilot]
+  pull_request:
+    branches: [koranipilot]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  c4-verify:
+    name: Verify C4 Prebuilt & Python Controller
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 50
+
+      - name: Verify prebuilt C4 binary & schema integrity
+        run: |
+          git diff --exit-code 6a17f75c6bcb67c85f252a1acc342d94d5b8a4d2 -- \
+            common/params_keys.h common/params_pyx.so cereal/
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python test dependencies
+        run: python -m pip install --upgrade pip && pip install pytest numpy qrcode pillow
+
+      - name: Run Koranipilot Python tests
+        run: |
+          PYTHONPATH=. pytest \
+            -c sunnypilot/koranipilot/tests/pytest.ini \
+            --confcutdir=sunnypilot/koranipilot/tests \
+            -v sunnypilot/koranipilot/tests
+
+  android-apk:
+    name: Build & Test Android Companion APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle 8.14.3
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.14.3'
+
+      - name: Run Android unit tests and build debug APK
+        working-directory: phone/android
+        run: gradle :app:testDebugUnitTest :app:assembleDebug --no-daemon
+
+      - name: Prepare release APK file
+        run: cp phone/android/app/build/outputs/apk/debug/app-debug.apk phone/android/koranipilot-companion.apk
+
+      - name: Upload APK workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: koranipilot-companion.apk
+          path: phone/android/koranipilot-companion.apk
+
+      - name: Publish latest-apk GitHub Release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/koranipilot'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view latest-apk >/dev/null 2>&1; then
+            gh release upload latest-apk phone/android/koranipilot-companion.apk --clobber
+            gh release edit latest-apk --target "${GITHUB_SHA}"
+          else
+            gh release create latest-apk phone/android/koranipilot-companion.apk \
+              --target "${GITHUB_SHA}" \
+              --title "고라니파일럿 2.0 안드로이드 내비 앱 (최신)" \
+              --notes "안드로이드 폰에 설치해 콤마4(C4)로 방지턱 · 급커브 · 단속카메라 정보를 보내는 연동 앱입니다."
+          fi
